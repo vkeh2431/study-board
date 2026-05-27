@@ -80,9 +80,9 @@ com.example.study_board
 - **검증**: 존재하지 않는 ID 조회 시 404 JSON 응답 확인
 
 ### Phase 4: Validation
-- [ ] `build.gradle`에 `spring-boot-starter-validation` 의존성 추가
-- [ ] Request DTO에 @NotBlank, @Size 등 검증 어노테이션 추가
-- [ ] Controller에 @Valid 적용
+- [x] `build.gradle`에 `spring-boot-starter-validation` 의존성 추가
+- [x] Request DTO에 @NotBlank, @Size 등 검증 어노테이션 추가
+- [x] Controller에 @Valid 적용
 - **배우는 것**: Bean Validation, @NotBlank vs @NotNull vs @NotEmpty 차이 (면접 빈출)
 - **검증**: 빈 값으로 POST 요청 시 400 에러 + 필드별 에러 메시지 확인
 
