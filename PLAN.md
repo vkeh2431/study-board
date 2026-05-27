@@ -87,10 +87,10 @@ com.example.study_board
 - **검증**: 빈 값으로 POST 요청 시 400 에러 + 필드별 에러 메시지 확인
 
 ### Phase 5: Comment 엔티티 + CRUD
-- [ ] `Comment` 엔티티 (@ManyToOne(fetch=LAZY), @JoinColumn)
-- [ ] `Post`에 @OneToMany(mappedBy, cascade=REMOVE) 추가
-- [ ] `CommentRepository` (findByPostIdOrderByCreatedAtDesc 쿼리 메서드)
-- [ ] CommentService, CommentController, DTO 구현
+- [x] `Comment` 엔티티 (@ManyToOne(fetch=LAZY), @JoinColumn)
+- [x] `Post`에 @OneToMany(mappedBy, cascade=REMOVE) 추가
+- [x] `CommentRepository` (findByPostIdOrderByCreatedAtDesc 쿼리 메서드)
+- [x] CommentService, CommentController, DTO 구현
 - **배우는 것**: JPA 연관관계 (면접 최빈출), LAZY vs EAGER, cascade, 쿼리 메서드 네이밍
 - **검증**: 댓글 CRUD + 게시글 삭제 시 댓글 cascade 삭제 확인
 

@@ -1,11 +1,15 @@
 package com.example.study_board.domain.post;
 
 import com.example.study_board.common.BaseTimeEntity;
+import com.example.study_board.domain.comment.Comment;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Getter
@@ -27,6 +31,9 @@ public class Post extends BaseTimeEntity {
 
     @Column(nullable = false)
     private int viewCount;
+
+    @OneToMany(mappedBy = "post", cascade = CascadeType.REMOVE)
+    private List<Comment> comments = new ArrayList<>();
 
     @Builder
     public Post(String title, String content, String author) {
