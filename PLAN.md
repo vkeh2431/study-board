@@ -60,14 +60,14 @@ com.example.study_board
 - [x] `JpaAuditingConfig` (@EnableJpaAuditing)
 - [x] `Post` 엔티티 (@Entity, @Id, @GeneratedValue, Lombok @Getter/@Builder/@NoArgsConstructor(PROTECTED))
 - [x] `PostRepository` (JpaRepository 상속)
-- [ ] `PostRepositoryTest` 작성 및 실행
+- [x] `PostRepositoryTest` 작성 및 실행
 - **배우는 것**: JPA 엔티티 매핑, JPA Auditing, Repository 추상화, @DataJpaTest
 - **검증**: PostRepositoryTest 작성 및 실행, H2 콘솔에서 테이블 확인
 
 ### Phase 2: Post Service + Controller + DTO
 - [x] Request/Response DTO (Java `record`로 구현)
-- [ ] `PostService` (@Service, @Transactional)
-- [ ] `PostController` (@RestController, @RequestMapping)
+- [x] `PostService` (@Service, @Transactional)
+- [x] `PostController` (@RestController, @RequestMapping)
 - **배우는 것**: 계층형 아키텍처, 생성자 주입, DTO 패턴, dirty checking, ResponseEntity
 - **검증**: curl로 CRUD 전체 테스트
 
