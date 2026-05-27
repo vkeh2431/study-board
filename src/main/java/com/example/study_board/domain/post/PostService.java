@@ -4,6 +4,7 @@ import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +32,7 @@ public class PostService {
     @Transactional
     public PostResponse findById(Long id) {
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("해당 게시글이 존재하지 않습니다. id=" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Post", id));
         post.incrementViewCount();
         return PostResponse.from(post);
     }
@@ -45,7 +46,7 @@ public class PostService {
     @Transactional
     public PostResponse update(Long id, PostUpdateRequest request) {
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("해당 게시글이 존재하지 않습니다. id=" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Post", id));
         post.update(request.title(), request.content());
         return PostResponse.from(post);
     }
@@ -53,7 +54,7 @@ public class PostService {
     @Transactional
     public void delete(Long id) {
         Post post = postRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("해당 게시글이 존재하지 않습니다. id=" + id));
+                .orElseThrow(() -> new ResourceNotFoundException("Post", id));
         postRepository.delete(post);
     }
 }

@@ -72,10 +72,10 @@ com.example.study_board
 - **검증**: curl로 CRUD 전체 테스트
 
 ### Phase 3: 예외 처리
-- [ ] `ResourceNotFoundException` (커스텀 예외)
-- [ ] `ErrorResponse` (표준 에러 응답 DTO)
-- [ ] `GlobalExceptionHandler` (@RestControllerAdvice)
-- [ ] PostService에서 커스텀 예외 적용
+- [x] `ResourceNotFoundException` (커스텀 예외)
+- [x] `ErrorResponse` (표준 에러 응답 DTO)
+- [x] `GlobalExceptionHandler` (@RestControllerAdvice)
+- [x] PostService에서 커스텀 예외 적용
 - **배우는 것**: @RestControllerAdvice, @ExceptionHandler, 표준 에러 응답 포맷
 - **검증**: 존재하지 않는 ID 조회 시 404 JSON 응답 확인
 
