@@ -51,4 +51,9 @@ public class Post extends BaseTimeEntity {
     public void incrementViewCount() {
         this.viewCount++;
     }
+
+    public void addComment(Comment comment) {
+        this.comments.add(comment);
+        comment.assignPost(this);
+    }
 }

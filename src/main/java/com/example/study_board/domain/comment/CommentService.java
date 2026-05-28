@@ -27,8 +27,8 @@ public class CommentService {
         Comment comment = Comment.builder()
                 .content(request.content())
                 .author(request.author())
-                .post(post)
                 .build();
+        post.addComment(comment);
         Comment saved = commentRepository.save(comment);
         return CommentResponse.from(saved);
     }

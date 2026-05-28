@@ -102,6 +102,7 @@ class PostServiceTest {
         PostListResponse response = result.getContent().get(0);
         assertThat(response.title()).isEqualTo("제목");
         assertThat(response.author()).isEqualTo("작성자");
+        assertThat(response.commentCount()).isEqualTo(0);
         assertThat(result.getTotalElements()).isEqualTo(1);
     }
 

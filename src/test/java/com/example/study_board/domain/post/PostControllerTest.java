@@ -51,7 +51,7 @@ class PostControllerTest {
     void findAll_with_default_pagination() throws Exception {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<PostListResponse> content = List.of(
-                new PostListResponse(1L, "제목1", "작성자1", 0, LocalDateTime.now())
+                new PostListResponse(1L, "제목1", "작성자1", 0, 0L, LocalDateTime.now())
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
@@ -70,7 +70,7 @@ class PostControllerTest {
     void findAll_with_keyword() throws Exception {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<PostListResponse> content = List.of(
-                new PostListResponse(1L, "Spring Boot 입문", "작성자", 0, LocalDateTime.now())
+                new PostListResponse(1L, "Spring Boot 입문", "작성자", 0, 0L, LocalDateTime.now())
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
@@ -87,7 +87,7 @@ class PostControllerTest {
     void findAll_with_custom_page_and_size() throws Exception {
         PageRequest pageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<PostListResponse> content = List.of(
-                new PostListResponse(6L, "제목6", "작성자", 0, LocalDateTime.now())
+                new PostListResponse(6L, "제목6", "작성자", 0, 0L, LocalDateTime.now())
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 10);
 

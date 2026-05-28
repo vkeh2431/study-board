@@ -69,6 +69,22 @@ class CommentServiceTest {
     }
 
     @Test
+    @DisplayName("댓글 생성 시 Post의 comments에도 추가되어 양방향 동기화됨")
+    void create_comment_synchronizes_bidirectional() {
+        Post post = createPost();
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "댓글 작성자");
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+        given(commentRepository.save(any(Comment.class))).willAnswer(inv -> inv.getArgument(0));
+
+        commentService.create(1L, request);
+
+        assertThat(post.getComments()).hasSize(1);
+        assertThat(post.getComments().get(0).getContent()).isEqualTo("댓글 내용");
+        assertThat(post.getComments().get(0).getPost()).isSameAs(post);
+    }
+
+    @Test
     @DisplayName("댓글 생성 시 게시글이 없으면 예외 발생")
     void create_comment_post_not_found() {
         CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "댓글 작성자");

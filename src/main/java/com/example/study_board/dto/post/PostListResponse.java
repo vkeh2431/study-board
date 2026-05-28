@@ -9,6 +9,7 @@ public record PostListResponse(
         String title,
         String author,
         int viewCount,
+        long commentCount,
         LocalDateTime createdAt
 ) {
     public static PostListResponse from(Post post) {
@@ -17,6 +18,7 @@ public record PostListResponse(
                 post.getTitle(),
                 post.getAuthor(),
                 post.getViewCount(),
+                post.getComments().size(),
                 post.getCreatedAt()
         );
     }

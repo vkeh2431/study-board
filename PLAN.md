@@ -125,16 +125,27 @@ Spring Boot 4.x 정식 패키지인지 확인:
 - 컴파일 실패하면 `com.fasterxml.jackson.databind.ObjectMapper`로 교체.
 
 ### Phase 8: JPA 심화 (N+1, Fetch Join, 양방향 편의 메서드)
-- [ ] `PostListResponse`에 `commentCount` 필드 추가 → `PostService.findAll`에서 `post.getComments().size()`로 N+1 발생 경로 생성
-- [ ] `application-test.properties`에 `spring.jpa.properties.hibernate.generate_statistics=true` 추가
-- [ ] **Red**: `PostRepositoryTest`에 N+1 발생 검증 테스트 추가 (`Statistics.getQueryExecutionCount()`가 1+N인지 assert)
-- [ ] **Green**: `PostRepository`에 `@EntityGraph(attributePaths = {"comments"})` 또는 `@Query("... JOIN FETCH ...")` 적용
-  - 컬렉션 fetch join + Pageable의 인메모리 페이징 경고를 **직접 확인**할 것
-  - 대안으로 `COUNT(c) GROUP BY` JPQL 서브쿼리도 실험
-- [ ] `Post.java`에 양방향 편의 메서드 `addComment(Comment)` 추가, `Comment`에 `assignPost(Post)` 패키지 사설 세터 추가
-- [ ] `CommentService.create`에서 `post.addComment(comment)` 사용하도록 리팩터 (기존 통합 테스트 유지)
+- [x] `PostListResponse`에 `commentCount` 필드 추가 → `PostService.findAll`에서 `post.getComments().size()`로 N+1 발생 경로 생성
+- [x] `application-test.properties`에 `spring.jpa.properties.hibernate.generate_statistics=true` + `default_batch_fetch_size=-1` 추가
+- [x] **Red**: `PostQueryPerformanceTest` 신설. Hibernate Statistics로 쿼리 수 단언 → 7개(count+findAll+5×comments) 발생 확인
+- [x] **Green**: `PostRepository.findAll` override + `searchByKeyword`에 `@EntityGraph(attributePaths = {"comments"})` 적용 → 2개(count+JOIN FETCH)로 감소
+- [x] `Post`에 `addComment(Comment)` 편의 메서드 추가, `Comment.assignPost(Post)`는 javadoc 경고와 함께 public 노출
+- [x] `CommentService.create`에서 `post.addComment(comment)` 호출하도록 리팩터링
 - **배우는 것**: LAZY 동작 원리, N+1 발생 조건, fetch join vs @EntityGraph 차이, 컬렉션 fetch join + Pageable 함정, mappedBy 동기화 책임
-- **검증**: 추가 테스트 통과 + 기존 테스트 전부 통과
+- **검증**: ✅ 전체 테스트 GREEN
+
+#### 학습 노트: N+1 해결 전략 트레이드오프
+
+| 방식 | 장점 | 단점 |
+|---|---|---|
+| `@EntityGraph` (적용 방식) | 코드 변경 최소, distinct 자동 처리 (Hibernate 6+) | 컬렉션 fetch + Pageable 시 메모리 페이징 위험 |
+| `JPQL JOIN FETCH` + `DISTINCT` | 명시적, 학습 효과 | 동일하게 메모리 페이징 위험, distinct 직접 명시 필요 |
+| COUNT 서브쿼리 DTO projection | 페이징 안전, 컬렉션 전체 로딩 안 함 | DTO 전용 쿼리 작성 필요 |
+| `@BatchSize` / `default_batch_fetch_size` | 자동 IN-clause로 N+1 완화 | 여전히 +1 쿼리, 메인 properties에 살아있어 테스트에서 의도가 가려질 수 있음 |
+
+> ⚠️ **컬렉션 fetch join + Pageable**: Hibernate가 전체 결과를 메모리에 로드 후 자바에서 페이징. 데이터가 많아지면 OOM. 프로덕션에서는 ① ID 두 단계 쿼리(IDs 페이징 → 본문 fetch) ② COUNT 서브쿼리 DTO projection ③ `@BatchSize`로 회피.
+>
+> ⚠️ **테스트에서 `batch_fetch_size`를 -1로 비활성화한 이유**: 메인 `application.properties`의 `default_batch_fetch_size=10`이 살아있으면 IN-clause로 묶여 N+1이 `1 + ceil(N/10)`으로 가려져 학습 의도가 실패한다.
 
 ### Phase 9: 실무 인프라 (Profile, 로깅, OSIV)
 - [ ] `application-dev.properties` 신설 (현재 H2 메모리/show-sql/h2-console 설정 이관)

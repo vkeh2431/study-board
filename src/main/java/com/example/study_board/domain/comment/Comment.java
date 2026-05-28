@@ -37,4 +37,13 @@ public class Comment extends BaseTimeEntity {
     public void update(String content) {
         this.content = content;
     }
+
+    /**
+     * 양방향 동기화 전용. 외부에서는 {@link Post#addComment(Comment)}를 호출해야 한다.
+     * Post와 Comment가 다른 패키지에 있어 가시성을 public으로 두지만,
+     * 직접 호출은 Post.comments 컬렉션과의 동기화를 깨뜨릴 수 있다.
+     */
+    public void assignPost(Post post) {
+        this.post = post;
+    }
 }
