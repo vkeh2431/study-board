@@ -95,8 +95,8 @@ com.example.study_board
 - **검증**: 댓글 CRUD + 게시글 삭제 시 댓글 cascade 삭제 확인
 
 ### Phase 6: 페이징 + 검색
-- [ ] `PostRepository`에 `@Query`로 제목+내용 검색 추가
-- [ ] PostService/Controller에 keyword 파라미터 연동
+- [x] `PostRepository`에 `@Query`로 제목+내용 검색 추가
+- [x] PostService/Controller에 keyword 파라미터 연동
 - **배우는 것**: Pageable, Page<T>, @Query(JPQL), @Param, @PageableDefault
 - **검증**: 15개 이상 게시글 생성 후 페이징/검색 테스트
 

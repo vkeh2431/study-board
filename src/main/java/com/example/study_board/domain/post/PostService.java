@@ -6,10 +6,10 @@ import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import java.util.List;
 
 @Service
 @Transactional(readOnly = true)
@@ -37,10 +37,11 @@ public class PostService {
         return PostResponse.from(post);
     }
 
-    public List<PostListResponse> findAll() {
-        return postRepository.findAll().stream()
-                .map(PostListResponse::from)
-                .toList();
+    public Page<PostListResponse> findAll(String keyword, Pageable pageable) {
+        Page<Post> posts = (keyword == null || keyword.isBlank())
+                ? postRepository.findAll(pageable)
+                : postRepository.searchByKeyword(keyword, pageable);
+        return posts.map(PostListResponse::from);
     }
 
     @Transactional
