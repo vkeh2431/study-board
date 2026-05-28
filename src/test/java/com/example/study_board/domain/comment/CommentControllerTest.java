@@ -3,6 +3,7 @@ package com.example.study_board.domain.comment;
 import com.example.study_board.dto.comment.CommentCreateRequest;
 import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
+import com.example.study_board.global.exception.ResourceNotFoundException;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -103,5 +104,59 @@ class CommentControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(commentService).delete(1L);
+    }
+
+    @Test
+    @DisplayName("댓글 생성 시 게시글이 없으면 404")
+    void create_comment_post_not_found() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "작성자");
+
+        given(commentService.create(eq(999L), any(CommentCreateRequest.class)))
+                .willThrow(new ResourceNotFoundException("Post", 999L));
+
+        mockMvc.perform(post("/api/posts/999/comments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("댓글 생성 시 작성자가 비어있으면 400 에러")
+    void create_comment_author_blank_validation_fail() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "");
+
+        mockMvc.perform(post("/api/posts/1/comments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    }
+
+    @Test
+    @DisplayName("댓글 수정 시 댓글이 없으면 404")
+    void update_comment_not_found() throws Exception {
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
+
+        given(commentService.update(eq(999L), any(CommentUpdateRequest.class)))
+                .willThrow(new ResourceNotFoundException("Comment", 999L));
+
+        mockMvc.perform(put("/api/comments/999")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("댓글 수정 시 내용이 비어있으면 400 에러")
+    void update_comment_validation_fail() throws Exception {
+        CommentUpdateRequest request = new CommentUpdateRequest("");
+
+        mockMvc.perform(put("/api/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 }

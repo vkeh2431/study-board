@@ -101,11 +101,11 @@ com.example.study_board
 - **검증**: 15개 이상 게시글 생성 후 페이징/검색 테스트
 
 ### Phase 7: 테스트 코드
-- [ ] `PostRepositoryTest` (@DataJpaTest)
-- [ ] `PostServiceTest` (Mockito - @Mock, @InjectMocks)
-- [ ] `PostControllerTest` (@WebMvcTest + MockMvc)
-- [ ] `CommentServiceTest` (Mockito)
-- [ ] `PostIntegrationTest` (@SpringBootTest + @AutoConfigureMockMvc)
+- [x] `PostRepositoryTest` (@DataJpaTest)
+- [x] `PostServiceTest` (Mockito - @Mock, @InjectMocks)
+- [x] `PostControllerTest` (@WebMvcTest + MockMvc)
+- [x] `CommentServiceTest` (Mockito)
+- [x] `PostIntegrationTest` (@SpringBootTest + @AutoConfigureMockMvc)
 - **배우는 것**: 슬라이스 테스트, MockMvc, Mockito, 테스트 피라미드
 - **검증**: `./gradlew test` 전체 통과
 
