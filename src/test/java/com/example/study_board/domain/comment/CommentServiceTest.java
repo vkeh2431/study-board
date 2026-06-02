@@ -9,6 +9,7 @@ import com.example.study_board.global.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -62,10 +63,15 @@ class CommentServiceTest {
 
         CommentResponse response = commentService.create(1L, request);
 
+        ArgumentCaptor<Comment> captor = ArgumentCaptor.forClass(Comment.class);
+        verify(commentRepository).save(captor.capture());
+        Comment persisted = captor.getValue();
+        assertThat(persisted.getContent()).isEqualTo("댓글 내용");
+        assertThat(persisted.getAuthor()).isEqualTo("댓글 작성자");
+
         assertThat(response.content()).isEqualTo("댓글 내용");
         assertThat(response.author()).isEqualTo("댓글 작성자");
         verify(postRepository).findById(1L);
-        verify(commentRepository).save(any(Comment.class));
     }
 
     @Test
@@ -110,6 +116,15 @@ class CommentServiceTest {
 
         assertThat(responses).hasSize(2);
         verify(commentRepository).findByPostIdOrderByCreatedAtDesc(1L);
+    }
+
+    @Test
+    @DisplayName("댓글 목록 조회 시 게시글이 없으면 예외 발생")
+    void findByPostId_post_not_found() {
+        given(postRepository.findById(999L)).willReturn(Optional.empty());
+
+        assertThatThrownBy(() -> commentService.findByPostId(999L))
+                .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test

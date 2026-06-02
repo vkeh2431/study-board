@@ -1,5 +1,6 @@
 package com.example.study_board.domain.post;
 
+import com.example.study_board.domain.comment.Comment;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
@@ -8,12 +9,14 @@ import com.example.study_board.global.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 
 import java.util.List;
@@ -21,6 +24,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -89,21 +93,27 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("Page<Post>가 Page<PostListResponse>로 변환")
+    @DisplayName("조회된 각 Post가 필드까지 PostListResponse로 변환된다")
     void findAll_returns_page_of_post_list_response() {
-        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Post post = createPost("제목", "내용", "작성자");
-        Page<Post> postPage = new PageImpl<>(List.of(post), pageable, 1);
+        Post withActivity = createPost("첫 글", "내용1", "작성자A");
+        withActivity.incrementViewCount();
+        withActivity.addComment(Comment.builder().content("댓글").author("댓글작성자").build());
+        Post plain = createPost("둘째 글", "내용2", "작성자B");
+        Page<Post> postPage = new PageImpl<>(List.of(withActivity, plain));
 
-        given(postRepository.findAll(pageable)).willReturn(postPage);
+        given(postRepository.findAll(any(Pageable.class))).willReturn(postPage);
 
-        Page<PostListResponse> result = postService.findAll(null, pageable);
+        Page<PostListResponse> result = postService.findAll(null, PageRequest.of(0, 10));
 
-        PostListResponse response = result.getContent().get(0);
-        assertThat(response.title()).isEqualTo("제목");
-        assertThat(response.author()).isEqualTo("작성자");
-        assertThat(response.commentCount()).isEqualTo(0);
-        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent())
+                .extracting(
+                        PostListResponse::title,
+                        PostListResponse::author,
+                        PostListResponse::viewCount,
+                        PostListResponse::commentCount)
+                .containsExactly(
+                        tuple("첫 글", "작성자A", 1, 1L),
+                        tuple("둘째 글", "작성자B", 0, 0L));
     }
 
     @Test
@@ -116,10 +126,16 @@ class PostServiceTest {
 
         PostResponse response = postService.create(request);
 
+        ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
+        verify(postRepository).save(captor.capture());
+        Post persisted = captor.getValue();
+        assertThat(persisted.getTitle()).isEqualTo("제목");
+        assertThat(persisted.getContent()).isEqualTo("내용");
+        assertThat(persisted.getAuthor()).isEqualTo("작성자");
+
         assertThat(response.title()).isEqualTo("제목");
         assertThat(response.content()).isEqualTo("내용");
         assertThat(response.author()).isEqualTo("작성자");
-        verify(postRepository).save(any(Post.class));
     }
 
     @Test

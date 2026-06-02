@@ -61,7 +61,8 @@ class CommentControllerTest {
         mockMvc.perform(post("/api/posts/1/comments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest());
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
     }
 
     @Test
@@ -79,6 +80,17 @@ class CommentControllerTest {
         mockMvc.perform(get("/api/posts/1/comments"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
+    }
+
+    @Test
+    @DisplayName("댓글 목록 조회 시 게시글이 없으면 404")
+    void findByPostId_post_not_found() throws Exception {
+        given(commentService.findByPostId(999L))
+                .willThrow(new ResourceNotFoundException("Post", 999L));
+
+        mockMvc.perform(get("/api/posts/999/comments"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
     }
 
     @Test

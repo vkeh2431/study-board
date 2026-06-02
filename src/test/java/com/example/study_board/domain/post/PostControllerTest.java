@@ -5,15 +5,12 @@ import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.global.exception.ResourceNotFoundException;
+import org.springframework.data.domain.*;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -55,7 +52,7 @@ class PostControllerTest {
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
-        given(postService.findAll(isNull(), any())).willReturn(page);
+        given(postService.findAll(isNull(), any(Pageable.class))).willReturn(page);
 
         mockMvc.perform(get("/api/posts"))
                 .andExpect(status().isOk())
@@ -74,7 +71,7 @@ class PostControllerTest {
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
-        given(postService.findAll(eq("Spring"), any())).willReturn(page);
+        given(postService.findAll(eq("Spring"), any(Pageable.class))).willReturn(page);
 
         mockMvc.perform(get("/api/posts").param("keyword", "Spring"))
                 .andExpect(status().isOk())
@@ -91,7 +88,7 @@ class PostControllerTest {
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 10);
 
-        given(postService.findAll(isNull(), any())).willReturn(page);
+        given(postService.findAll(isNull(), any(Pageable.class))).willReturn(page);
 
         mockMvc.perform(get("/api/posts")
                         .param("page", "1")
