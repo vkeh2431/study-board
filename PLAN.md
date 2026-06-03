@@ -254,6 +254,45 @@ API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지
 
 ---
 
+## 기능 확장 로드맵 (Phase 17~18)
+
+프로덕션 골격(Phase 0~16)이 완성된 뒤, "기능 개수"가 아니라 **새로운 백엔드 개념**을 한 겹 더 쌓기 위한 기능 확장. 두 Phase는 *댓글 생성 → 이벤트 발행 → 알림 생성*으로 자연스럽게 이어진다. 둘 다 `Member` 도메인(Phase 11)에 의존한다.
+
+### Phase 17: 대댓글 (계층형 댓글)
+게시판에 가장 자연스러운 확장. JPA 자기참조(self-join)와 트리 직렬화를 익힌다.
+- [ ] `Comment`에 자기참조 추가: `parent`(`@ManyToOne(fetch=LAZY)`, 자기 자신 참조), `children`(`@OneToMany(mappedBy="parent")`). **인접 리스트(adjacency list) 모델**
+- [ ] depth 정책 결정: 단순화를 위해 **1-depth(댓글→대댓글)까지만** 허용(루트 댓글에만 대댓글 가능) 또는 무제한 중 택1 — 학습 후 README에 트레이드오프 기록
+- [ ] 대댓글 작성 API: `POST /api/posts/{postId}/comments`에 `parentId`(nullable) 추가, parent의 post 일치 검증
+- [ ] 조회 시 트리 구성: 루트 댓글 + `replies` 재귀 구조 응답 DTO(`CommentResponse`에 `List<CommentResponse> replies`). 계층 댓글 **N+1 주의**(Phase 8 연계 — `@EntityGraph` 또는 한 번에 로딩 후 메모리에서 트리 조립)
+- [ ] **삭제 정책**: 자식이 있는 부모 댓글 삭제 시 물리 삭제 대신 `"삭제된 댓글입니다"` soft delete 패턴(Phase 13의 `deletedAt` 연계). 자식 없으면 실제 삭제
+- [ ] **TDD 순서**: ①`@DataJpaTest`로 자기참조 저장·부모-자식 조회(Red→Green) → ②Service 트리 구성 로직(평면 리스트 → 트리, 단위 테스트) → ③Controller `parentId`로 대댓글 작성 슬라이스 → ④자식 있는 부모 삭제 시 soft delete 동작
+- **배우는 것**: 자기참조 연관관계, 인접 리스트 vs 경로 열거(path enumeration) vs 클로저 테이블 비교(면접 포인트), 트리 직렬화, 계층 댓글 N+1, 부모 삭제 정책
+- **검증**: 댓글에 대댓글 작성 → 트리 형태 응답, depth 정책 동작, 자식 있는 부모 삭제 시 본문만 가려지고 트리 유지
+
+### Phase 18: 알림 (이벤트 기반 + 비동기)
+"내 글/댓글에 댓글이 달리면 알림". 댓글 로직과 알림 로직을 **이벤트로 분리(decoupling)**하는 설계 감각이 핵심.
+- [ ] `Notification` 엔티티: 수신자(`@ManyToOne Member`), `type`(enum: COMMENT_ON_POST 등), `message`, `read`(boolean), 연관 리소스 id(postId 등), `createdAt`
+- [ ] **이벤트 발행**: `CommentService.create`에서 `ApplicationEventPublisher`로 `CommentCreatedEvent` 발행(알림 생성 로직을 직접 호출하지 않는다 — 결합 제거)
+- [ ] **이벤트 수신**: `@TransactionalEventListener(phase = AFTER_COMMIT)`로 댓글 **커밋 후** 알림 생성 + `@Async`로 비동기 처리(`@EnableAsync`). "왜 AFTER_COMMIT인가"(롤백 시 알림 안 감), "별도 스레드의 트랜잭션·영속성 컨텍스트 분리 주의" 기록
+- [ ] **본인 예외**: 본인 글에 본인이 댓글 → 알림 생성 안 함
+- [ ] 알림 API: `GET /api/notifications`(내 알림 목록, 미읽음 우선), `PATCH /api/notifications/{id}/read`(읽음 처리). 본인 알림만 접근(Phase 12 소유권 인가 연계)
+- [ ] (선택) **SSE 실시간 푸시**: `SseEmitter`로 미읽음 알림 실시간 전달 — 여유 시
+- [ ] **TDD 순서**: ①`CommentService.create` 호출 시 이벤트 발행 검증(`ApplicationEvents` 또는 publisher mock, Red→Green) → ②리스너가 `CommentCreatedEvent` 수신 시 알림 생성(타인 글) / 본인 글 댓글은 미생성 → ③알림 목록·읽음 처리 Controller 슬라이스 → ④(선택) SSE 수신 통합 테스트
+- **배우는 것**: `ApplicationEventPublisher`/`@EventListener`, `@TransactionalEventListener`(AFTER_COMMIT) 트랜잭션 경계, `@Async` 비동기와 별도 스레드의 영속성 컨텍스트 함정, 도메인 이벤트 패턴(결합도 낮추기), (선택) SSE
+- **의존성**: 코어(추가 의존성 없음). SSE는 spring-web 기본 제공
+- **검증**: 타인이 내 글에 댓글 → 알림 생성, 본인 댓글 → 알림 없음, 읽음 처리 동작, (선택) SSE로 실시간 수신
+
+#### 우선순위 요약 (기능 확장)
+
+| 후보 | Phase | 비고 |
+|---|---|---|
+| 대댓글(계층형 댓글) | 17 | 게시판 핵심 깊이, 자기참조·트리. Member(11)·soft delete(13) 연계 |
+| 알림(이벤트 기반) | 18 | 설계 감각 어필(decoupling). 17의 댓글 흐름과 자연 연결 |
+
+> 💡 17·18은 **취업 필수가 아니라 차별화**다. Phase 0~16(특히 11)이 우선. 둘 다 "기능 추가"보다 *자기참조/이벤트 기반*이라는 **새 개념 학습**이 목적이므로, 면접에서 설명할 수 있을 만큼 깊게 판다.
+
+---
+
 ## 면접 대비 핵심 개념 커버리지
 
 | 개념 | 해당 Phase |
@@ -286,3 +325,5 @@ API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지
 | 동시성 제어 (낙관/비관 락, lost update) | **Phase 16** |
 | Redis 캐싱 | **Phase 16** |
 | CI/CD, Testcontainers | **Phase 16** |
+| 자기참조 연관관계, 계층형(트리) 데이터 | **Phase 17** |
+| 도메인 이벤트, @TransactionalEventListener, @Async | **Phase 18** |
