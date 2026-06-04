@@ -1,9 +1,13 @@
 package com.example.study_board.domain.post;
 
+import com.example.study_board.domain.member.Member;
+import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.global.exception.BusinessException;
+import com.example.study_board.global.exception.ErrorCode;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,16 +23,19 @@ import org.springframework.transaction.annotation.Transactional;
 public class PostService {
 
     private final PostRepository postRepository;
+    private final MemberRepository memberRepository;
 
     @Transactional
-    public PostResponse create(PostCreateRequest request) {
+    public PostResponse create(Long memberId, PostCreateRequest request) {
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
         Post post = Post.builder()
                 .title(request.title())
                 .content(request.content())
-                .author(request.author())
+                .member(member)
                 .build();
         Post saved = postRepository.save(post);
-        log.info("게시글 생성 완료: id={}, author={}", saved.getId(), saved.getAuthor());
+        log.info("게시글 생성 완료: id={}, author={}", saved.getId(), member.getUsername());
         return PostResponse.from(saved);
     }
 

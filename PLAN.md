@@ -182,14 +182,18 @@ Security를 얹기 전 응답/에러 계약을 안정화. 작지만 모든 후�
 
 ### Phase 11: Spring Security + JWT + Member 도메인 [최우선 핵심]
 가장 크고 중요한 Phase. 신입~주니어 면접 최빈출(인증/인가, 필터체인)이며 나머지 절반의 전제.
-- [ ] `Member` 엔티티(email/username, password(BCrypt), `Role` enum) + `MemberRepository`
-- [ ] 회원가입 / 로그인 API, JWT 발급(access + refresh 권장)
-- [ ] `SecurityConfig`(`SecurityFilterChain` bean), `JwtAuthenticationFilter`, 커스텀 principal 또는 `UserDetailsService`
-- [ ] **author 마이그레이션**: `Post.author(String)` → `Post.member(@ManyToOne(LAZY))`, `Comment` 동일. 작성자는 `@AuthenticationPrincipal`에서 주입, `PostCreateRequest`/`CommentCreateRequest`에서 `author` 제거, 응답 DTO는 `authorName`을 `member.getUsername()`에서 파생. `@EntityGraph`에 `member` fetch 추가(N+1 재발 방지, Phase 8 연계)
-- [ ] **TDD 순서**: ①`MemberRepository`(email 중복) → ②`MemberService` 회원가입(비번 인코딩/중복 예외) → ③JWT 유틸(만료·변조) → ④`spring-security-test`로 미인증 401·인증 생성 201 → ⑤기존 Post/Comment 컨트롤러·통합 테스트를 author 전송 → 인증 principal 기반으로 먼저 Red 전환 후 프로덕션 변경
+- [x] `Member` 엔티티(email/username, password(BCrypt), `Role` enum) + `MemberRepository`
+- [x] 회원가입 / 로그인 API, JWT 발급(access + refresh) — refresh는 `type=refresh` 클레임 stateless JWT, `POST /api/auth/refresh`
+- [x] `SecurityConfig`(`SecurityFilterChain` bean), `JwtAuthenticationFilter`(JWT 검증 → `CustomUserDetailsService.loadByMemberId`로 principal 복원), `CustomUserDetails`/`CustomUserDetailsService`. 필터 단계 401/403은 `RestAuthenticationEntryPoint`/`RestAccessDeniedHandler`가 Phase 10 에러 계약(JSON) 유지
+- [x] **author 마이그레이션**: `Post.author(String)` → `Post.member(@ManyToOne(LAZY))`, `Comment` 동일. 작성자는 `@AuthenticationPrincipal CustomUserDetails`에서 주입, `PostCreateRequest`/`CommentCreateRequest`에서 `author` 제거, 응답 DTO는 `authorName`을 `member.getUsername()`에서 파생. `@EntityGraph`에 `member` fetch 추가(N+1 재발 방지, Phase 8 연계)
+- [x] **TDD 순서**: ①`MemberRepository`(email 중복) → ②`MemberService` 회원가입(비번 인코딩/중복 예외) → ③JWT 유틸(만료·변조) → ④`spring-security-test`로 미인증 401·인증 생성 201 → ⑤기존 Post/Comment 컨트롤러·통합 테스트를 author 전송 → 인증 principal 기반으로 먼저 Red 전환 후 프로덕션 변경
 - **배우는 것**: 필터체인 순서, `SecurityContextHolder`, 세션 vs JWT(stateless), BCrypt/단방향 해시, 인증 vs 인가, stateless에서 CSRF off 이유
-- **의존성**: `spring-boot-starter-security`, JWT(`io.jsonwebtoken:jjwt` — 직접 구현이 학습 효과 ↑), `spring-security-test`
-- **검증**: 회원가입→로그인→토큰으로 게시글 작성 흐름, 미인증 요청 401, 전체 테스트 GREEN
+- **의존성**: `spring-boot-starter-security`, `io.jsonwebtoken:jjwt 0.12.6`(api/impl/jackson), `spring-boot-starter-security-test`(Boot 4 모듈러 테스트 스타터)
+- **검증**: ✅ 회원가입→로그인→토큰으로 게시글 작성(authorName 주입)→미인증 401(UNAUTHORIZED)→읽기 공개→refresh→변조 토큰 401→중복 이메일 409 curl 확인 + 전체 테스트 GREEN(98개) + dev 프로필 부팅(기본 보안 비밀번호 미생성=SecurityConfig 적용, /h2-console 접근)
+  - ⚠️ Boot 4 노트: `spring-boot-starter-security-test`가 클래스패스에 있으면 `@WebMvcTest`가 보안을 강제 → 슬라이스 쓰기 테스트는 커스텀 `@WithMockCustomUser`(principal=`CustomUserDetails`)로 인증, CSRF off라 csrf() 불필요. 기본 `@WithMockUser`는 principal이 `User`라 `@AuthenticationPrincipal CustomUserDetails`로 안 들어감
+  - ⚠️ jjwt 0.12 API: `verifyWith()`/`parseSignedClaims().getPayload()`/`signWith(key)`. jjwt-jackson은 Jackson 2를 transitive로 끌어오지만 내부 전용이라 Spring Boot 4 Jackson 3와 격리 공존. 커스텀 핸들러는 Jackson 3(`tools.jackson...ObjectMapper`) 주입
+  - ⚠️ Spring Security 7: `DaoAuthenticationProvider`는 `new DaoAuthenticationProvider(userDetailsService)` 생성자 + `setPasswordEncoder` (무인자 생성자 제거)
+  - ⚠️ 소유권 인가(작성자만 수정/삭제)는 Phase 12, `@CreatedBy` 감사 컬럼은 Phase 13 범위
 
 ### Phase 12: 소유권 기반 인가 (작성자만 수정/삭제)
 Phase 11 직후 이어지는 소규모 Phase. 인증과 인가의 차이를 코드로 체득.

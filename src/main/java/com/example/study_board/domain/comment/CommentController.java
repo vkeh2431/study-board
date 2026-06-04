@@ -3,10 +3,12 @@ package com.example.study_board.domain.comment;
 import com.example.study_board.dto.comment.CommentCreateRequest;
 import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
+import com.example.study_board.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,8 +22,9 @@ public class CommentController {
     @PostMapping("/api/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> create(
             @PathVariable Long postId,
+            @AuthenticationPrincipal CustomUserDetails principal,
             @Valid @RequestBody CommentCreateRequest request) {
-        CommentResponse response = commentService.create(postId, request);
+        CommentResponse response = commentService.create(postId, principal.getMemberId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

@@ -1,6 +1,9 @@
 package com.example.study_board.domain.post;
 
 import com.example.study_board.domain.comment.Comment;
+import com.example.study_board.domain.member.Member;
+import com.example.study_board.domain.member.MemberRepository;
+import com.example.study_board.domain.member.Role;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
@@ -35,14 +38,26 @@ class PostServiceTest {
     @Mock
     private PostRepository postRepository;
 
+    @Mock
+    private MemberRepository memberRepository;
+
     @InjectMocks
     private PostService postService;
 
-    private Post createPost(String title, String content, String author) {
+    private Member createMember(String username) {
+        return Member.builder()
+                .email(username + "@example.com")
+                .username(username)
+                .password("encoded")
+                .role(Role.USER)
+                .build();
+    }
+
+    private Post createPost(String title, String content, String authorName) {
         return Post.builder()
                 .title(title)
                 .content(content)
-                .author(author)
+                .member(createMember(authorName))
                 .build();
     }
 
@@ -97,7 +112,7 @@ class PostServiceTest {
     void findAll_returns_page_of_post_list_response() {
         Post withActivity = createPost("첫 글", "내용1", "작성자A");
         withActivity.incrementViewCount();
-        withActivity.addComment(Comment.builder().content("댓글").author("댓글작성자").build());
+        withActivity.addComment(Comment.builder().content("댓글").build());
         Post plain = createPost("둘째 글", "내용2", "작성자B");
         Page<Post> postPage = new PageImpl<>(List.of(withActivity, plain));
 
@@ -108,7 +123,7 @@ class PostServiceTest {
         assertThat(result.getContent())
                 .extracting(
                         PostListResponse::title,
-                        PostListResponse::author,
+                        PostListResponse::authorName,
                         PostListResponse::viewCount,
                         PostListResponse::commentCount)
                 .containsExactly(
@@ -117,25 +132,27 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("게시글 생성")
+    @DisplayName("게시글 생성 - 인증된 회원이 작성자로 주입된다")
     void create_post() {
-        PostCreateRequest request = new PostCreateRequest("제목", "내용", "작성자");
-        Post saved = createPost("제목", "내용", "작성자");
+        Member member = createMember("작성자");
+        PostCreateRequest request = new PostCreateRequest("제목", "내용");
+        Post saved = Post.builder().title("제목").content("내용").member(member).build();
 
+        given(memberRepository.findById(1L)).willReturn(Optional.of(member));
         given(postRepository.save(any(Post.class))).willReturn(saved);
 
-        PostResponse response = postService.create(request);
+        PostResponse response = postService.create(1L, request);
 
         ArgumentCaptor<Post> captor = ArgumentCaptor.forClass(Post.class);
         verify(postRepository).save(captor.capture());
         Post persisted = captor.getValue();
         assertThat(persisted.getTitle()).isEqualTo("제목");
         assertThat(persisted.getContent()).isEqualTo("내용");
-        assertThat(persisted.getAuthor()).isEqualTo("작성자");
+        assertThat(persisted.getMember().getUsername()).isEqualTo("작성자");
 
         assertThat(response.title()).isEqualTo("제목");
         assertThat(response.content()).isEqualTo("내용");
-        assertThat(response.author()).isEqualTo("작성자");
+        assertThat(response.authorName()).isEqualTo("작성자");
     }
 
     @Test

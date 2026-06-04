@@ -4,6 +4,7 @@ import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -12,6 +13,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -22,8 +24,10 @@ public class PostController {
     private final PostService postService;
 
     @PostMapping
-    public ResponseEntity<PostResponse> create(@Valid @RequestBody PostCreateRequest request) {
-        PostResponse response = postService.create(request);
+    public ResponseEntity<PostResponse> create(
+            @AuthenticationPrincipal CustomUserDetails principal,
+            @Valid @RequestBody PostCreateRequest request) {
+        PostResponse response = postService.create(principal.getMemberId(), request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 

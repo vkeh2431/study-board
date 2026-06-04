@@ -47,4 +47,44 @@ class ErrorCodeTest {
         assertThat(errorCode.getCode()).isEqualTo("INTERNAL_SERVER_ERROR");
         assertThat(errorCode.getDefaultMessage()).isNotBlank();
     }
+
+    @Test
+    @DisplayName("DUPLICATE_EMAIL는 409 상태와 코드 문자열을 가진다")
+    void duplicate_email_mapping() {
+        ErrorCode errorCode = ErrorCode.DUPLICATE_EMAIL;
+
+        assertThat(errorCode.getStatus()).isEqualTo(HttpStatus.CONFLICT);
+        assertThat(errorCode.getCode()).isEqualTo("DUPLICATE_EMAIL");
+        assertThat(errorCode.getDefaultMessage()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("INVALID_CREDENTIALS는 401 상태와 코드 문자열을 가진다")
+    void invalid_credentials_mapping() {
+        ErrorCode errorCode = ErrorCode.INVALID_CREDENTIALS;
+
+        assertThat(errorCode.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(errorCode.getCode()).isEqualTo("INVALID_CREDENTIALS");
+        assertThat(errorCode.getDefaultMessage()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("UNAUTHORIZED는 401 상태와 코드 문자열을 가진다")
+    void unauthorized_mapping() {
+        ErrorCode errorCode = ErrorCode.UNAUTHORIZED;
+
+        assertThat(errorCode.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
+        assertThat(errorCode.getCode()).isEqualTo("UNAUTHORIZED");
+        assertThat(errorCode.getDefaultMessage()).isNotBlank();
+    }
+
+    @Test
+    @DisplayName("FORBIDDEN는 403 상태와 코드 문자열을 가진다")
+    void forbidden_mapping() {
+        ErrorCode errorCode = ErrorCode.FORBIDDEN;
+
+        assertThat(errorCode.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(errorCode.getCode()).isEqualTo("FORBIDDEN");
+        assertThat(errorCode.getDefaultMessage()).isNotBlank();
+    }
 }

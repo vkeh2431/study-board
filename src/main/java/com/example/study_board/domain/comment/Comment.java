@@ -1,6 +1,7 @@
 package com.example.study_board.domain.comment;
 
 import com.example.study_board.common.BaseTimeEntity;
+import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.post.Post;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -20,17 +21,18 @@ public class Comment extends BaseTimeEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(nullable = false, length = 50)
-    private String author;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_id", nullable = false)
+    private Member member;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id", nullable = false)
     private Post post;
 
     @Builder
-    public Comment(String content, String author, Post post) {
+    public Comment(String content, Member member, Post post) {
         this.content = content;
-        this.author = author;
+        this.member = member;
         this.post = post;
     }
 

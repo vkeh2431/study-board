@@ -1,5 +1,7 @@
 package com.example.study_board.domain.comment;
 
+import com.example.study_board.domain.member.Member;
+import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.post.Post;
 import com.example.study_board.domain.post.PostRepository;
 import com.example.study_board.dto.comment.CommentCreateRequest;
@@ -7,6 +9,8 @@ import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
 
 import java.util.List;
+import com.example.study_board.global.exception.BusinessException;
+import com.example.study_board.global.exception.ErrorCode;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,18 +25,21 @@ public class CommentService {
 
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
+    private final MemberRepository memberRepository;
 
     @Transactional
-    public CommentResponse create(Long postId, CommentCreateRequest request) {
+    public CommentResponse create(Long postId, Long memberId, CommentCreateRequest request) {
         Post post = postRepository.findById(postId)
                 .orElseThrow(() -> new ResourceNotFoundException("Post", postId));
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new BusinessException(ErrorCode.UNAUTHORIZED));
         Comment comment = Comment.builder()
                 .content(request.content())
-                .author(request.author())
+                .member(member)
                 .build();
         post.addComment(comment);
         Comment saved = commentRepository.save(comment);
-        log.info("댓글 생성 완료: id={}, postId={}", saved.getId(), postId);
+        log.info("댓글 생성 완료: id={}, postId={}, author={}", saved.getId(), postId, member.getUsername());
         return CommentResponse.from(saved);
     }
 

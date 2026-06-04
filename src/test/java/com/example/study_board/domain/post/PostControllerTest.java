@@ -4,14 +4,21 @@ import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.global.config.SecurityConfig;
 import com.example.study_board.global.exception.ErrorCode;
 import com.example.study_board.global.exception.ResourceNotFoundException;
+import com.example.study_board.global.security.CustomUserDetailsService;
+import com.example.study_board.global.security.JwtProvider;
+import com.example.study_board.global.security.RestAccessDeniedHandler;
+import com.example.study_board.global.security.RestAuthenticationEntryPoint;
+import com.example.study_board.global.security.WithMockCustomUser;
 import org.springframework.data.domain.*;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +40,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(PostController.class)
+@Import({SecurityConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class PostControllerTest {
 
     @Autowired
@@ -40,6 +48,12 @@ class PostControllerTest {
 
     @MockitoBean
     private PostService postService;
+
+    @MockitoBean
+    private JwtProvider jwtProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService userDetailsService;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -102,12 +116,13 @@ class PostControllerTest {
 
     @Test
     @DisplayName("게시글 생성")
+    @WithMockCustomUser
     void create_post() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("제목", "내용", "작성자");
+        PostCreateRequest request = new PostCreateRequest("제목", "내용");
         PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", 0,
                 LocalDateTime.now(), LocalDateTime.now());
 
-        given(postService.create(any(PostCreateRequest.class))).willReturn(response);
+        given(postService.create(eq(1L), any(PostCreateRequest.class))).willReturn(response);
 
         mockMvc.perform(post("/api/posts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -115,13 +130,26 @@ class PostControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.title").value("제목"))
-                .andExpect(jsonPath("$.author").value("작성자"));
+                .andExpect(jsonPath("$.authorName").value("작성자"));
+    }
+
+    @Test
+    @DisplayName("인증 없이 게시글 생성 시 401")
+    void create_post_unauthenticated() throws Exception {
+        PostCreateRequest request = new PostCreateRequest("제목", "내용");
+
+        mockMvc.perform(post("/api/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.getCode()));
     }
 
     @Test
     @DisplayName("게시글 생성 시 제목이 비어있으면 400 에러")
+    @WithMockCustomUser
     void create_post_validation_fail() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("", "내용", "작성자");
+        PostCreateRequest request = new PostCreateRequest("", "내용");
 
         mockMvc.perform(post("/api/posts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -158,6 +186,7 @@ class PostControllerTest {
 
     @Test
     @DisplayName("게시글 수정")
+    @WithMockCustomUser
     void update_post() throws Exception {
         PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
         PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", 0,
@@ -175,6 +204,7 @@ class PostControllerTest {
 
     @Test
     @DisplayName("게시글 수정 시 제목이 비어있으면 400 에러")
+    @WithMockCustomUser
     void update_post_validation_fail() throws Exception {
         PostUpdateRequest request = new PostUpdateRequest("", "내용");
 
@@ -187,6 +217,7 @@ class PostControllerTest {
 
     @Test
     @DisplayName("게시글 수정 시 게시글이 없으면 404")
+    @WithMockCustomUser
     void update_post_not_found() throws Exception {
         PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
 
@@ -202,6 +233,7 @@ class PostControllerTest {
 
     @Test
     @DisplayName("게시글 삭제")
+    @WithMockCustomUser
     void delete_post() throws Exception {
         mockMvc.perform(delete("/api/posts/1"))
                 .andExpect(status().isNoContent());
@@ -211,6 +243,7 @@ class PostControllerTest {
 
     @Test
     @DisplayName("게시글 삭제 시 게시글이 없으면 404")
+    @WithMockCustomUser
     void delete_post_not_found() throws Exception {
         willThrow(new ResourceNotFoundException("Post", 999L))
                 .given(postService).delete(999L);

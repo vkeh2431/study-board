@@ -9,11 +9,11 @@ import org.springframework.data.repository.query.Param;
 
 public interface PostRepository extends JpaRepository<Post, Long> {
 
-    @EntityGraph(attributePaths = {"comments"})
+    @EntityGraph(attributePaths = {"comments", "member"})
     @Override
     Page<Post> findAll(Pageable pageable);
 
-    @EntityGraph(attributePaths = {"comments"})
+    @EntityGraph(attributePaths = {"comments", "member"})
     @Query("SELECT p FROM Post p WHERE p.title LIKE %:keyword% OR p.content LIKE %:keyword%")
     Page<Post> searchByKeyword(@Param("keyword") String keyword, Pageable pageable);
 }

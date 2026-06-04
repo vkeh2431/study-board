@@ -1,5 +1,8 @@
 package com.example.study_board.domain.comment;
 
+import com.example.study_board.domain.member.Member;
+import com.example.study_board.domain.member.MemberRepository;
+import com.example.study_board.domain.member.Role;
 import com.example.study_board.domain.post.Post;
 import com.example.study_board.domain.post.PostRepository;
 import com.example.study_board.dto.comment.CommentCreateRequest;
@@ -32,45 +35,59 @@ class CommentServiceTest {
     @Mock
     private PostRepository postRepository;
 
+    @Mock
+    private MemberRepository memberRepository;
+
     @InjectMocks
     private CommentService commentService;
+
+    private Member createMember() {
+        return Member.builder()
+                .email("commenter@example.com")
+                .username("댓글 작성자")
+                .password("encoded")
+                .role(Role.USER)
+                .build();
+    }
 
     private Post createPost() {
         return Post.builder()
                 .title("제목")
                 .content("내용")
-                .author("작성자")
+                .member(createMember())
                 .build();
     }
 
     private Comment createComment(Post post) {
         return Comment.builder()
                 .content("댓글 내용")
-                .author("댓글 작성자")
+                .member(createMember())
                 .post(post)
                 .build();
     }
 
     @Test
-    @DisplayName("댓글 생성")
+    @DisplayName("댓글 생성 - 인증된 회원이 작성자로 주입된다")
     void create_comment() {
         Post post = createPost();
-        Comment comment = createComment(post);
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "댓글 작성자");
+        Member member = createMember();
+        Comment comment = Comment.builder().content("댓글 내용").member(member).post(post).build();
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
 
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
+        given(memberRepository.findById(1L)).willReturn(Optional.of(member));
         given(commentRepository.save(any(Comment.class))).willReturn(comment);
 
-        CommentResponse response = commentService.create(1L, request);
+        CommentResponse response = commentService.create(1L, 1L, request);
 
         ArgumentCaptor<Comment> captor = ArgumentCaptor.forClass(Comment.class);
         verify(commentRepository).save(captor.capture());
         Comment persisted = captor.getValue();
         assertThat(persisted.getContent()).isEqualTo("댓글 내용");
-        assertThat(persisted.getAuthor()).isEqualTo("댓글 작성자");
+        assertThat(persisted.getMember().getUsername()).isEqualTo("댓글 작성자");
 
         assertThat(response.content()).isEqualTo("댓글 내용");
-        assertThat(response.author()).isEqualTo("댓글 작성자");
+        assertThat(response.authorName()).isEqualTo("댓글 작성자");
         verify(postRepository).findById(1L);
     }
 
@@ -78,12 +95,14 @@ class CommentServiceTest {
     @DisplayName("댓글 생성 시 Post의 comments에도 추가되어 양방향 동기화됨")
     void create_comment_synchronizes_bidirectional() {
         Post post = createPost();
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "댓글 작성자");
+        Member member = createMember();
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
 
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
+        given(memberRepository.findById(1L)).willReturn(Optional.of(member));
         given(commentRepository.save(any(Comment.class))).willAnswer(inv -> inv.getArgument(0));
 
-        commentService.create(1L, request);
+        commentService.create(1L, 1L, request);
 
         assertThat(post.getComments()).hasSize(1);
         assertThat(post.getComments().get(0).getContent()).isEqualTo("댓글 내용");
@@ -93,11 +112,11 @@ class CommentServiceTest {
     @Test
     @DisplayName("댓글 생성 시 게시글이 없으면 예외 발생")
     void create_comment_post_not_found() {
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "댓글 작성자");
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
 
         given(postRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> commentService.create(999L, request))
+        assertThatThrownBy(() -> commentService.create(999L, 1L, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 

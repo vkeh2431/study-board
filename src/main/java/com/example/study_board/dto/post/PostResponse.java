@@ -8,7 +8,7 @@ public record PostResponse(
         Long id,
         String title,
         String content,
-        String author,
+        String authorName,
         int viewCount,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
@@ -18,7 +18,7 @@ public record PostResponse(
                 post.getId(),
                 post.getTitle(),
                 post.getContent(),
-                post.getAuthor(),
+                post.getMember().getUsername(),
                 post.getViewCount(),
                 post.getCreatedAt(),
                 post.getUpdatedAt()

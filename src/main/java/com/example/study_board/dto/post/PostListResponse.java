@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 public record PostListResponse(
         Long id,
         String title,
-        String author,
+        String authorName,
         int viewCount,
         long commentCount,
         LocalDateTime createdAt
@@ -16,7 +16,7 @@ public record PostListResponse(
         return new PostListResponse(
                 post.getId(),
                 post.getTitle(),
-                post.getAuthor(),
+                post.getMember().getUsername(),
                 post.getViewCount(),
                 post.getComments().size(),
                 post.getCreatedAt()

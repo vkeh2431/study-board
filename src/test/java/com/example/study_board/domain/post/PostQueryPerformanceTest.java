@@ -1,6 +1,8 @@
 package com.example.study_board.domain.post;
 
 import com.example.study_board.domain.comment.Comment;
+import com.example.study_board.domain.member.Member;
+import com.example.study_board.domain.member.Role;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.global.config.JpaAuditingConfig;
 import jakarta.persistence.EntityManager;
@@ -35,16 +37,23 @@ class PostQueryPerformanceTest {
 
     @BeforeEach
     void setUp() {
+        Member member = Member.builder()
+                .email("author@example.com")
+                .username("작성자")
+                .password("encoded")
+                .role(Role.USER)
+                .build();
+        em.persist(member);
         for (int i = 1; i <= 5; i++) {
             Post post = postRepository.save(Post.builder()
                     .title("제목" + i)
                     .content("내용" + i)
-                    .author("작성자")
+                    .member(member)
                     .build());
             for (int j = 1; j <= 3; j++) {
                 em.persist(Comment.builder()
                         .content("댓글" + j)
-                        .author("user")
+                        .member(member)
                         .post(post)
                         .build());
             }
@@ -66,7 +75,7 @@ class PostQueryPerformanceTest {
 
         assertThat(posts.getContent()).hasSize(5);
         assertThat(statistics.getPrepareStatementCount())
-                .as("페이징 count(1) + Post+comments fetch(1) = 2개여야 한다 (N+1 발생 시 count(1)+findAll(1)+comments(5)=7개)")
+                .as("페이징 count(1) + Post+comments+member fetch(1) = 2개여야 한다 (member가 EntityGraph에서 빠지면 작성자 조회로 N+1 재발)")
                 .isEqualTo(2);
     }
 }

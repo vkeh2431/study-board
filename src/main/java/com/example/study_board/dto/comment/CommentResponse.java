@@ -8,7 +8,7 @@ public record CommentResponse(
         Long id,
         Long postId,
         String content,
-        String author,
+        String authorName,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
 ) {
@@ -17,7 +17,7 @@ public record CommentResponse(
                 comment.getId(),
                 comment.getPost().getId(),
                 comment.getContent(),
-                comment.getAuthor(),
+                comment.getMember().getUsername(),
                 comment.getCreatedAt(),
                 comment.getUpdatedAt()
         );

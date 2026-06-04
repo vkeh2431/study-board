@@ -2,6 +2,7 @@ package com.example.study_board.domain.post;
 
 import com.example.study_board.common.BaseTimeEntity;
 import com.example.study_board.domain.comment.Comment;
+import com.example.study_board.domain.member.Member;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -26,8 +27,9 @@ public class Post extends BaseTimeEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
-    @Column(nullable = false, length = 50)
-    private String author;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "member_id", nullable = false)
+    private Member member;
 
     @Column(nullable = false)
     private int viewCount;
@@ -36,10 +38,10 @@ public class Post extends BaseTimeEntity {
     private List<Comment> comments = new ArrayList<>();
 
     @Builder
-    public Post(String title, String content, String author) {
+    public Post(String title, String content, Member member) {
         this.title = title;
         this.content = content;
-        this.author = author;
+        this.member = member;
         this.viewCount = 0;
     }
 

@@ -3,13 +3,20 @@ package com.example.study_board.domain.comment;
 import com.example.study_board.dto.comment.CommentCreateRequest;
 import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
+import com.example.study_board.global.config.SecurityConfig;
 import com.example.study_board.global.exception.ErrorCode;
 import com.example.study_board.global.exception.ResourceNotFoundException;
+import com.example.study_board.global.security.CustomUserDetailsService;
+import com.example.study_board.global.security.JwtProvider;
+import com.example.study_board.global.security.RestAccessDeniedHandler;
+import com.example.study_board.global.security.RestAuthenticationEntryPoint;
+import com.example.study_board.global.security.WithMockCustomUser;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(CommentController.class)
+@Import({SecurityConfig.class, RestAuthenticationEntryPoint.class, RestAccessDeniedHandler.class})
 class CommentControllerTest {
 
     @Autowired
@@ -34,30 +42,50 @@ class CommentControllerTest {
     @MockitoBean
     private CommentService commentService;
 
+    @MockitoBean
+    private JwtProvider jwtProvider;
+
+    @MockitoBean
+    private CustomUserDetailsService userDetailsService;
+
     @Autowired
     private ObjectMapper objectMapper;
 
     @Test
     @DisplayName("댓글 생성")
+    @WithMockCustomUser
     void create_comment() throws Exception {
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "작성자");
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
         CommentResponse response = new CommentResponse(1L, 1L, "댓글 내용", "작성자",
                 LocalDateTime.now(), LocalDateTime.now());
 
-        given(commentService.create(eq(1L), any(CommentCreateRequest.class))).willReturn(response);
+        given(commentService.create(eq(1L), eq(1L), any(CommentCreateRequest.class))).willReturn(response);
 
         mockMvc.perform(post("/api/posts/1/comments")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.content").value("댓글 내용"))
-                .andExpect(jsonPath("$.author").value("작성자"));
+                .andExpect(jsonPath("$.authorName").value("작성자"));
+    }
+
+    @Test
+    @DisplayName("인증 없이 댓글 생성 시 401")
+    void create_comment_unauthenticated() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
+
+        mockMvc.perform(post("/api/posts/1/comments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.getCode()));
     }
 
     @Test
     @DisplayName("댓글 생성 시 내용이 비어있으면 400 에러")
+    @WithMockCustomUser
     void create_comment_validation_fail() throws Exception {
-        CommentCreateRequest request = new CommentCreateRequest("", "작성자");
+        CommentCreateRequest request = new CommentCreateRequest("");
 
         mockMvc.perform(post("/api/posts/1/comments")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -96,6 +124,7 @@ class CommentControllerTest {
 
     @Test
     @DisplayName("댓글 수정")
+    @WithMockCustomUser
     void update_comment() throws Exception {
         CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
         CommentResponse response = new CommentResponse(1L, 1L, "수정된 내용", "작성자",
@@ -112,6 +141,7 @@ class CommentControllerTest {
 
     @Test
     @DisplayName("댓글 삭제")
+    @WithMockCustomUser
     void delete_comment() throws Exception {
         mockMvc.perform(delete("/api/comments/1"))
                 .andExpect(status().isNoContent());
@@ -121,10 +151,11 @@ class CommentControllerTest {
 
     @Test
     @DisplayName("댓글 생성 시 게시글이 없으면 404")
+    @WithMockCustomUser
     void create_comment_post_not_found() throws Exception {
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "작성자");
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
 
-        given(commentService.create(eq(999L), any(CommentCreateRequest.class)))
+        given(commentService.create(eq(999L), eq(1L), any(CommentCreateRequest.class)))
                 .willThrow(new ResourceNotFoundException("Post", 999L));
 
         mockMvc.perform(post("/api/posts/999/comments")
@@ -135,19 +166,8 @@ class CommentControllerTest {
     }
 
     @Test
-    @DisplayName("댓글 생성 시 작성자가 비어있으면 400 에러")
-    void create_comment_author_blank_validation_fail() throws Exception {
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용", "");
-
-        mockMvc.perform(post("/api/posts/1/comments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
-    }
-
-    @Test
     @DisplayName("댓글 수정 시 댓글이 없으면 404")
+    @WithMockCustomUser
     void update_comment_not_found() throws Exception {
         CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
 
@@ -163,6 +183,7 @@ class CommentControllerTest {
 
     @Test
     @DisplayName("댓글 수정 시 내용이 비어있으면 400 에러")
+    @WithMockCustomUser
     void update_comment_validation_fail() throws Exception {
         CommentUpdateRequest request = new CommentUpdateRequest("");
 
