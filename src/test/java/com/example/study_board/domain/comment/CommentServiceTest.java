@@ -8,6 +8,7 @@ import com.example.study_board.domain.post.PostRepository;
 import com.example.study_board.dto.comment.CommentCreateRequest;
 import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
+import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -16,6 +17,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -24,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -64,6 +67,12 @@ class CommentServiceTest {
                 .member(createMember())
                 .post(post)
                 .build();
+    }
+
+    private Comment commentOwnedBy(Long ownerId, Post post) {
+        Member author = createMember();
+        ReflectionTestUtils.setField(author, "id", ownerId);
+        return Comment.builder().content("댓글 내용").member(author).post(post).build();
     }
 
     @Test
@@ -147,15 +156,15 @@ class CommentServiceTest {
     }
 
     @Test
-    @DisplayName("댓글 수정")
+    @DisplayName("작성자 본인이 댓글 수정")
     void update_comment() {
         Post post = createPost();
-        Comment comment = createComment(post);
+        Comment comment = commentOwnedBy(1L, post);
         CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
 
         given(commentRepository.findById(1L)).willReturn(Optional.of(comment));
 
-        CommentResponse response = commentService.update(1L, request);
+        CommentResponse response = commentService.update(1L, 1L, Role.USER, request);
 
         assertThat(response.content()).isEqualTo("수정된 내용");
         verify(commentRepository).findById(1L);
@@ -168,19 +177,48 @@ class CommentServiceTest {
 
         given(commentRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> commentService.update(999L, request))
+        assertThatThrownBy(() -> commentService.update(999L, 1L, Role.USER, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
-    @DisplayName("댓글 삭제")
-    void delete_comment() {
+    @DisplayName("작성자가 아닌 사용자가 댓글 수정하면 ForbiddenException")
+    void update_comment_by_non_owner_forbidden() {
         Post post = createPost();
-        Comment comment = createComment(post);
+        Comment comment = commentOwnedBy(1L, post);
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
 
         given(commentRepository.findById(1L)).willReturn(Optional.of(comment));
 
-        commentService.delete(1L);
+        assertThatThrownBy(() -> commentService.update(1L, 2L, Role.USER, request))
+                .isInstanceOf(ForbiddenException.class);
+        assertThat(comment.getContent()).isEqualTo("댓글 내용");
+    }
+
+    @Test
+    @DisplayName("ADMIN은 타인 댓글도 수정 가능")
+    void update_comment_by_admin_allowed() {
+        Post post = createPost();
+        Comment comment = commentOwnedBy(1L, post);
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
+
+        given(commentRepository.findById(1L)).willReturn(Optional.of(comment));
+
+        CommentResponse response = commentService.update(1L, 2L, Role.ADMIN, request);
+
+        assertThat(response.content()).isEqualTo("수정된 내용");
+        assertThat(comment.getContent()).isEqualTo("수정된 내용");
+    }
+
+    @Test
+    @DisplayName("작성자 본인이 댓글 삭제")
+    void delete_comment() {
+        Post post = createPost();
+        Comment comment = commentOwnedBy(1L, post);
+
+        given(commentRepository.findById(1L)).willReturn(Optional.of(comment));
+
+        commentService.delete(1L, 1L, Role.USER);
 
         verify(commentRepository).delete(comment);
     }
@@ -190,7 +228,33 @@ class CommentServiceTest {
     void delete_comment_not_found() {
         given(commentRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> commentService.delete(999L))
+        assertThatThrownBy(() -> commentService.delete(999L, 1L, Role.USER))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("작성자가 아닌 사용자가 댓글 삭제하면 ForbiddenException")
+    void delete_comment_by_non_owner_forbidden() {
+        Post post = createPost();
+        Comment comment = commentOwnedBy(1L, post);
+
+        given(commentRepository.findById(1L)).willReturn(Optional.of(comment));
+
+        assertThatThrownBy(() -> commentService.delete(1L, 2L, Role.USER))
+                .isInstanceOf(ForbiddenException.class);
+        verify(commentRepository, never()).delete(any(Comment.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN은 타인 댓글도 삭제 가능")
+    void delete_comment_by_admin_allowed() {
+        Post post = createPost();
+        Comment comment = commentOwnedBy(1L, post);
+
+        given(commentRepository.findById(1L)).willReturn(Optional.of(comment));
+
+        commentService.delete(1L, 2L, Role.ADMIN);
+
+        verify(commentRepository).delete(comment);
     }
 }

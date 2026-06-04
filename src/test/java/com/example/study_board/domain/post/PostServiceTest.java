@@ -8,6 +8,7 @@ import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +32,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -59,6 +62,12 @@ class PostServiceTest {
                 .content(content)
                 .member(createMember(authorName))
                 .build();
+    }
+
+    private Post postOwnedBy(Long ownerId) {
+        Member author = createMember("작성자");
+        ReflectionTestUtils.setField(author, "id", ownerId);
+        return Post.builder().title("기존 제목").content("기존 내용").member(author).build();
     }
 
     @Test
@@ -179,14 +188,14 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("게시글 수정")
+    @DisplayName("작성자 본인이 게시글 수정")
     void update_post() {
-        Post post = createPost("기존 제목", "기존 내용", "작성자");
+        Post post = postOwnedBy(1L);
         PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
 
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
 
-        PostResponse response = postService.update(1L, request);
+        PostResponse response = postService.update(1L, 1L, Role.USER, request);
 
         assertThat(response.title()).isEqualTo("수정된 제목");
         assertThat(response.content()).isEqualTo("수정된 내용");
@@ -200,18 +209,45 @@ class PostServiceTest {
 
         given(postRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> postService.update(999L, request))
+        assertThatThrownBy(() -> postService.update(999L, 1L, Role.USER, request))
                 .isInstanceOf(ResourceNotFoundException.class);
     }
 
     @Test
-    @DisplayName("게시글 삭제")
-    void delete_post() {
-        Post post = createPost("제목", "내용", "작성자");
+    @DisplayName("작성자가 아닌 사용자가 수정하면 ForbiddenException")
+    void update_post_by_non_owner_forbidden() {
+        Post post = postOwnedBy(1L);
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
 
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
 
-        postService.delete(1L);
+        assertThatThrownBy(() -> postService.update(1L, 2L, Role.USER, request))
+                .isInstanceOf(ForbiddenException.class);
+        assertThat(post.getTitle()).isEqualTo("기존 제목");
+    }
+
+    @Test
+    @DisplayName("ADMIN은 타인 게시글도 수정 가능")
+    void update_post_by_admin_allowed() {
+        Post post = postOwnedBy(1L);
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+
+        PostResponse response = postService.update(1L, 2L, Role.ADMIN, request);
+
+        assertThat(response.title()).isEqualTo("수정된 제목");
+        assertThat(post.getTitle()).isEqualTo("수정된 제목");
+    }
+
+    @Test
+    @DisplayName("작성자 본인이 게시글 삭제")
+    void delete_post() {
+        Post post = postOwnedBy(1L);
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+
+        postService.delete(1L, 1L, Role.USER);
 
         verify(postRepository).delete(post);
     }
@@ -221,7 +257,31 @@ class PostServiceTest {
     void delete_post_not_found() {
         given(postRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> postService.delete(999L))
+        assertThatThrownBy(() -> postService.delete(999L, 1L, Role.USER))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("작성자가 아닌 사용자가 삭제하면 ForbiddenException")
+    void delete_post_by_non_owner_forbidden() {
+        Post post = postOwnedBy(1L);
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+
+        assertThatThrownBy(() -> postService.delete(1L, 2L, Role.USER))
+                .isInstanceOf(ForbiddenException.class);
+        verify(postRepository, never()).delete(any(Post.class));
+    }
+
+    @Test
+    @DisplayName("ADMIN은 타인 게시글도 삭제 가능")
+    void delete_post_by_admin_allowed() {
+        Post post = postOwnedBy(1L);
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+
+        postService.delete(1L, 2L, Role.ADMIN);
+
+        verify(postRepository).delete(post);
     }
 }

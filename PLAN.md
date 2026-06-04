@@ -197,11 +197,13 @@ Security를 얹기 전 응답/에러 계약을 안정화. 작지만 모든 후�
 
 ### Phase 12: 소유권 기반 인가 (작성자만 수정/삭제)
 Phase 11 직후 이어지는 소규모 Phase. 인증과 인가의 차이를 코드로 체득.
-- [ ] `PostService`/`CommentService`의 update·delete에서 "현재 사용자 == 작성자" 검증, 아니면 403(`ErrorCode.FORBIDDEN`). `ADMIN` role은 우회 허용
-- [ ] 심화: `@PreAuthorize`(`@EnableMethodSecurity`) vs 서비스 레이어 수동 검증 비교
-- [ ] **TDD**: Service 테스트 "다른 사용자가 수정 시 ForbiddenException"(Red) → 검증 로직(Green), Controller 슬라이스 403 확인
+- [x] `PostService`/`CommentService`의 update·delete에서 "현재 사용자 == 작성자" 검증, 아니면 403(`ErrorCode.FORBIDDEN`). `ADMIN` role은 우회 허용. 컨트롤러는 `@AuthenticationPrincipal`에서 `getMemberId()`/`getRole()`을 서비스로 전달(시그니처 `update(id, memberId, role, request)`), 검증은 엔티티 `isOwner(memberId)` + 서비스 `verifyOwnership`. 신규 `ForbiddenException extends BusinessException`
+- [x] 심화: `@PreAuthorize`(`@EnableMethodSecurity`) vs 서비스 레이어 수동 검증 비교 — **서비스 수동 검증으로 구현**하고 `@PreAuthorize` 비교는 학습 노트(`ForbiddenException` javadoc)로만 기록(`@EnableMethodSecurity` 미적용)
+- [x] **TDD**: Service 테스트 "다른 사용자가 수정 시 ForbiddenException"(Red) → 검증 로직(Green), Controller 슬라이스 403 확인. 단위 테스트는 `ReflectionTestUtils.setField(member,"id",..)`로 작성자 식별자 부여
 - **배우는 것**: 인증 vs 인가, 도메인 권한 검증 vs `@PreAuthorize`, 403 vs 404 정책(존재 노출 회피)
-- **검증**: 타인 게시글 수정/삭제 시 403, 본인/ADMIN은 정상
+- **검증**: ✅ 타인 게시글/댓글 수정·삭제 시 403(FORBIDDEN), 본인/ADMIN은 정상 + 전체 테스트 GREEN(113개, +15)
+  - ⚠️ 순서 노트: `findById`(404) → `verifyOwnership`(403) 순으로 없는 리소스는 항상 404 우선. LAZY `member` 프록시의 `getId()`는 FK에서 읽혀 추가 SELECT/초기화 없이 소유권 비교(OSIV=false 안전)
+  - ⚠️ 소유권 403(`BusinessException`→`GlobalExceptionHandler`)과 필터 단계 403(`RestAccessDeniedHandler`)은 경로가 다르지만 둘 다 `code:"FORBIDDEN"`으로 일관
 
 ### Phase 13: 실 DB(PostgreSQL) + Flyway + docker-compose + 프로파일·감사·soft delete
 H2 인메모리 졸업(사용자 결정). Phase 9(프로파일/로깅/OSIV)를 여기에 합쳐 마무리.

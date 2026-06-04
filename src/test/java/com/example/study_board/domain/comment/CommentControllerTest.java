@@ -3,8 +3,10 @@ package com.example.study_board.domain.comment;
 import com.example.study_board.dto.comment.CommentCreateRequest;
 import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
+import com.example.study_board.domain.member.Role;
 import com.example.study_board.global.config.SecurityConfig;
 import com.example.study_board.global.exception.ErrorCode;
+import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import com.example.study_board.global.security.CustomUserDetailsService;
 import com.example.study_board.global.security.JwtProvider;
@@ -27,6 +29,7 @@ import java.util.List;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -130,7 +133,7 @@ class CommentControllerTest {
         CommentResponse response = new CommentResponse(1L, 1L, "수정된 내용", "작성자",
                 LocalDateTime.now(), LocalDateTime.now());
 
-        given(commentService.update(eq(1L), any(CommentUpdateRequest.class))).willReturn(response);
+        given(commentService.update(eq(1L), eq(1L), eq(Role.USER), any(CommentUpdateRequest.class))).willReturn(response);
 
         mockMvc.perform(put("/api/comments/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -140,13 +143,41 @@ class CommentControllerTest {
     }
 
     @Test
+    @DisplayName("작성자가 아닌 사용자가 댓글 수정하면 403")
+    @WithMockCustomUser(memberId = 2L)
+    void update_comment_forbidden() throws Exception {
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
+
+        given(commentService.update(eq(1L), eq(2L), eq(Role.USER), any(CommentUpdateRequest.class)))
+                .willThrow(new ForbiddenException());
+
+        mockMvc.perform(put("/api/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
+    }
+
+    @Test
     @DisplayName("댓글 삭제")
     @WithMockCustomUser
     void delete_comment() throws Exception {
         mockMvc.perform(delete("/api/comments/1"))
                 .andExpect(status().isNoContent());
 
-        verify(commentService).delete(1L);
+        verify(commentService).delete(1L, 1L, Role.USER);
+    }
+
+    @Test
+    @DisplayName("작성자가 아닌 사용자가 댓글 삭제하면 403")
+    @WithMockCustomUser(memberId = 2L)
+    void delete_comment_forbidden() throws Exception {
+        willThrow(new ForbiddenException())
+                .given(commentService).delete(1L, 2L, Role.USER);
+
+        mockMvc.perform(delete("/api/comments/1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
     }
 
     @Test
@@ -171,7 +202,7 @@ class CommentControllerTest {
     void update_comment_not_found() throws Exception {
         CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
 
-        given(commentService.update(eq(999L), any(CommentUpdateRequest.class)))
+        given(commentService.update(eq(999L), eq(1L), eq(Role.USER), any(CommentUpdateRequest.class)))
                 .willThrow(new ResourceNotFoundException("Comment", 999L));
 
         mockMvc.perform(put("/api/comments/999")

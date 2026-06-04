@@ -4,8 +4,10 @@ import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.domain.member.Role;
 import com.example.study_board.global.config.SecurityConfig;
 import com.example.study_board.global.exception.ErrorCode;
+import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import com.example.study_board.global.security.CustomUserDetailsService;
 import com.example.study_board.global.security.JwtProvider;
@@ -192,7 +194,7 @@ class PostControllerTest {
         PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", 0,
                 LocalDateTime.now(), LocalDateTime.now());
 
-        given(postService.update(eq(1L), any(PostUpdateRequest.class))).willReturn(response);
+        given(postService.update(eq(1L), eq(1L), eq(Role.USER), any(PostUpdateRequest.class))).willReturn(response);
 
         mockMvc.perform(put("/api/posts/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -200,6 +202,22 @@ class PostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("수정된 제목"))
                 .andExpect(jsonPath("$.content").value("수정된 내용"));
+    }
+
+    @Test
+    @DisplayName("작성자가 아닌 사용자가 수정하면 403")
+    @WithMockCustomUser(memberId = 2L)
+    void update_post_forbidden() throws Exception {
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
+
+        given(postService.update(eq(1L), eq(2L), eq(Role.USER), any(PostUpdateRequest.class)))
+                .willThrow(new ForbiddenException());
+
+        mockMvc.perform(put("/api/posts/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
     }
 
     @Test
@@ -221,7 +239,7 @@ class PostControllerTest {
     void update_post_not_found() throws Exception {
         PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
 
-        given(postService.update(eq(999L), any(PostUpdateRequest.class)))
+        given(postService.update(eq(999L), eq(1L), eq(Role.USER), any(PostUpdateRequest.class)))
                 .willThrow(new ResourceNotFoundException("Post", 999L));
 
         mockMvc.perform(put("/api/posts/999")
@@ -238,7 +256,7 @@ class PostControllerTest {
         mockMvc.perform(delete("/api/posts/1"))
                 .andExpect(status().isNoContent());
 
-        verify(postService).delete(1L);
+        verify(postService).delete(1L, 1L, Role.USER);
     }
 
     @Test
@@ -246,10 +264,22 @@ class PostControllerTest {
     @WithMockCustomUser
     void delete_post_not_found() throws Exception {
         willThrow(new ResourceNotFoundException("Post", 999L))
-                .given(postService).delete(999L);
+                .given(postService).delete(999L, 1L, Role.USER);
 
         mockMvc.perform(delete("/api/posts/999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
+    }
+
+    @Test
+    @DisplayName("작성자가 아닌 사용자가 삭제하면 403")
+    @WithMockCustomUser(memberId = 2L)
+    void delete_post_forbidden() throws Exception {
+        willThrow(new ForbiddenException())
+                .given(postService).delete(1L, 2L, Role.USER);
+
+        mockMvc.perform(delete("/api/posts/1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
     }
 }

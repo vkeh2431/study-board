@@ -135,6 +135,38 @@ class PostIntegrationTest {
     }
 
     @Test
+    @DisplayName("타인이 게시글 수정 시 403 + 원본 보존")
+    void update_post_by_other_user_returns_403() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+        String otherToken = signupAndLogin("other@example.com", "다른사람", "password123");
+        PostUpdateRequest request = new PostUpdateRequest("해킹 제목", "해킹 내용");
+
+        mockMvc.perform(put("/api/posts/" + postId)
+                        .header("Authorization", "Bearer " + otherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
+
+        assertThat(postRepository.findById(postId))
+                .hasValueSatisfying(p -> assertThat(p.getTitle()).isEqualTo("제목"));
+    }
+
+    @Test
+    @DisplayName("타인이 게시글 삭제 시 403 + 원본 보존")
+    void delete_post_by_other_user_returns_403() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+        String otherToken = signupAndLogin("other@example.com", "다른사람", "password123");
+
+        mockMvc.perform(delete("/api/posts/" + postId)
+                        .header("Authorization", "Bearer " + otherToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
+
+        assertThat(postRepository.findById(postId)).isPresent();
+    }
+
+    @Test
     @DisplayName("게시글 삭제 시 댓글도 cascade 삭제")
     void delete_post_cascades_comments() throws Exception {
         Long postId = createPostViaApi("제목", "내용");

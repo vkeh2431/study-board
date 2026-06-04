@@ -41,6 +41,15 @@ public class Comment extends BaseTimeEntity {
     }
 
     /**
+     * 주어진 회원이 이 댓글의 작성자인지 판별한다(소유권 인가, Phase 12).
+     * LAZY {@code member} 프록시의 식별자는 FK에서 읽히므로 추가 SELECT 없이 비교한다.
+     */
+    public boolean isOwner(Long memberId) {
+        return memberId != null && member != null
+                && member.getId() != null && member.getId().equals(memberId);
+    }
+
+    /**
      * 양방향 동기화 전용. 외부에서는 {@link Post#addComment(Comment)}를 호출해야 한다.
      * Post와 Comment가 다른 패키지에 있어 가시성을 public으로 두지만,
      * 직접 호출은 Post.comments 컬렉션과의 동기화를 깨뜨릴 수 있다.

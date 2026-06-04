@@ -34,4 +34,14 @@ class BusinessExceptionTest {
         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.RESOURCE_NOT_FOUND);
         assertThat(exception.getMessage()).isEqualTo("Post not found. id=999");
     }
+
+    @Test
+    @DisplayName("ForbiddenException은 FORBIDDEN을 가진 BusinessException이다")
+    void forbidden_is_business_exception() {
+        ForbiddenException exception = new ForbiddenException();
+
+        assertThat(exception).isInstanceOf(BusinessException.class);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.FORBIDDEN);
+        assertThat(exception.getMessage()).isEqualTo(ErrorCode.FORBIDDEN.getDefaultMessage());
+    }
 }
