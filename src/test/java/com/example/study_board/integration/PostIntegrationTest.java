@@ -9,15 +9,16 @@ import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import tools.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.transaction.annotation.Transactional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
@@ -29,6 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@ActiveProfiles("test")
+@Transactional
 class PostIntegrationTest {
 
     @Autowired
@@ -42,12 +45,6 @@ class PostIntegrationTest {
 
     @Autowired
     private CommentRepository commentRepository;
-
-    @BeforeEach
-    void cleanUp() {
-        commentRepository.deleteAll();
-        postRepository.deleteAll();
-    }
 
     private Long createPostViaApi(String title, String content, String author) throws Exception {
         PostCreateRequest request = new PostCreateRequest(title, content, author);

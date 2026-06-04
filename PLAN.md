@@ -150,16 +150,17 @@ Spring Boot 4.x 정식 패키지인지 확인:
 > ⚠️ **테스트에서 `batch_fetch_size`를 -1로 비활성화한 이유**: 메인 `application.properties`의 `default_batch_fetch_size=10`이 살아있으면 IN-clause로 묶여 N+1이 `1 + ceil(N/10)`으로 가려져 학습 의도가 실패한다.
 
 ### Phase 9: 실무 인프라 (Profile, 로깅, OSIV)
-- [ ] `application-dev.properties` 신설 (현재 H2 메모리/show-sql/h2-console 설정 이관)
-- [ ] `application-prod.properties` 신설 (`ddl-auto=validate`, `show-sql=false` 등)
-- [ ] `application.properties`는 공통 항목만 남기고 `spring.profiles.active=dev` 설정
-- [ ] `src/test/resources/application-test.properties` 신설 (Phase 8의 `generate_statistics` 등)
-- [ ] `PostService`, `CommentService`에 `@Slf4j` + `log.info` 추가 (생성/수정/삭제 이벤트)
-- [ ] `GlobalExceptionHandler`의 `handleException`에 `log.error("unhandled exception", e)` 추가 (현재 메시지를 삼키고 있음)
-- [ ] `application.properties`에 `spring.jpa.open-in-view=false` 명시
-- [ ] (선택) `PostIntegrationTest`에 `@Transactional`로 자동 롤백 적용 — Phase 8 N+1 측정 테스트와 충돌 가능하니 신중히 적용 또는 클래스 분리
+- [x] `application-dev.properties` 신설 (현재 H2 메모리/show-sql/h2-console 설정 이관)
+- [x] `application-prod.properties` 신설 (`ddl-auto=validate`, `show-sql=false` 등) — ⚠️ 빈 H2+validate라 지금 부팅하면 실패하는 학습용 플레이스홀더(실 부팅은 Phase 13)
+- [x] `application.properties`는 공통 항목만 남기고 `spring.profiles.active=dev` 설정
+- [x] `src/test/resources/application-test.properties` (Phase 8에서 생성됨) — test 프로필 미상속 대비 `ddl-auto=create-drop` 보강
+- [x] `PostService`, `CommentService`에 `@Slf4j` + `log.info` 추가 (생성/수정/삭제 이벤트)
+- [x] `GlobalExceptionHandler`의 `handleException`에 `log.error("처리되지 않은 예외 발생", e)` 추가 (예외 삼킴 해결) + 4xx 핸들러는 `log.warn`으로 레벨 구분
+- [x] `application.properties`에 `spring.jpa.open-in-view=false` 명시 (부팅 시 OSIV 기본 경고 사라짐 확인)
+- [x] (선택) `PostIntegrationTest`에 `@Transactional`로 자동 롤백 적용 — N+1 측정은 별도 클래스(`PostQueryPerformanceTest`)라 충돌 없음. `@BeforeEach deleteAll()` 제거, `@ActiveProfiles("test")` 함께 적용(`StudyBoardApplicationTests`도 동일)
 - **배우는 것**: Spring Profile, slf4j 로깅 레벨, OSIV(Open Session In View)와 트레이드오프, 통합 테스트 자동 롤백
-- **검증**: 기존 테스트 전부 통과 + dev 프로필 부팅 + 잘못된 입력/없는 ID/cascade 삭제 curl 시나리오
+- **검증**: ✅ 전체 테스트 GREEN + dev 프로필 부팅(active=dev, OSIV 경고 없음, /h2-console) + 생성/조회(viewCount)/없는 ID 404/검증 400 curl 확인, 로그(`게시글 생성 완료`/`리소스 없음`/`입력값 검증 실패`) 출력 확인
+  - ⚠️ 학습 노트: 통합 테스트에 `@Transactional`을 붙이면 테스트 트랜잭션이 직렬화 시점까지 열려 있어 OSIV=false여도 `LazyInitializationException`을 잡지 못함 → OSIV 비활성화 안전성은 "DTO를 서비스 트랜잭션 안에서 완성하는 설계"가 보장
 
 ---
 

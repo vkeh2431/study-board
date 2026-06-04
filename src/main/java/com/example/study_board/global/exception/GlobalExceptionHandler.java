@@ -3,12 +3,14 @@ package com.example.study_board.global.exception;
 import java.util.HashMap;
 import java.util.Map;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -18,6 +20,7 @@ public class GlobalExceptionHandler {
         e.getBindingResult().getFieldErrors().forEach(error ->
                 fieldErrors.put(error.getField(), error.getDefaultMessage())
         );
+        log.warn("입력값 검증 실패: {}", fieldErrors);
 
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
@@ -30,6 +33,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleResourceNotFoundException(ResourceNotFoundException e) {
+        log.warn("리소스 없음: {}", e.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.NOT_FOUND.value(),
                 "RESOURCE_NOT_FOUND",
@@ -40,6 +44,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleIllegalArgumentException(IllegalArgumentException e) {
+        log.warn("잘못된 요청: {}", e.getMessage());
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.BAD_REQUEST.value(),
                 "BAD_REQUEST",
@@ -50,6 +55,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e) {
+        log.error("처리되지 않은 예외 발생", e);
         ErrorResponse response = new ErrorResponse(
                 HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 "INTERNAL_SERVER_ERROR",

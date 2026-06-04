@@ -9,9 +9,11 @@ import com.example.study_board.dto.comment.CommentUpdateRequest;
 import java.util.List;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @Transactional(readOnly = true)
 @RequiredArgsConstructor
@@ -30,6 +32,7 @@ public class CommentService {
                 .build();
         post.addComment(comment);
         Comment saved = commentRepository.save(comment);
+        log.info("댓글 생성 완료: id={}, postId={}", saved.getId(), postId);
         return CommentResponse.from(saved);
     }
 
@@ -46,6 +49,7 @@ public class CommentService {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment", id));
         comment.update(request.content());
+        log.info("댓글 수정 완료: id={}", id);
         return CommentResponse.from(comment);
     }
 
@@ -54,5 +58,6 @@ public class CommentService {
         Comment comment = commentRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Comment", id));
         commentRepository.delete(comment);
+        log.info("댓글 삭제 완료: id={}", id);
     }
 }
