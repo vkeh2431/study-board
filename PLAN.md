@@ -168,7 +168,7 @@ Spring Boot 4.x 정식 패키지인지 확인:
 
 Phase 0~9로 학습 기초가 정리된 뒤, "프로덕션 같은" 프로젝트로 발전시키기 위한 로드맵.
 **설계 원칙**: ① 인증/Member를 먼저(이후 후보들의 전제) ② 에러 계약을 Security 앞에 정리 ③ 모든 Phase는 기존 TDD(Red-Green-Refactor) 규칙 유지. `author` 제거처럼 기존 테스트가 깨지는 변경은 "테스트를 먼저 Red로 수정 → 프로덕션 코드 변경" 순서로 진행한다.
-**사용자 결정 반영**: 실 DB(PostgreSQL + Docker)로 졸업, 인증/인가(Spring Security)를 최우선 중점 주제로.
+**사용자 결정 반영**: 실 DB(MySQL + Docker)로 졸업(채용 공고 빈도 반영 — PostgreSQL → MySQL 변경), 인증/인가(Spring Security)를 최우선 중점 주제로.
 
 ### Phase 10: 공통 에러코드 enum + 예외 체계 정리
 Security를 얹기 전 응답/에러 계약을 안정화. 작지만 모든 후속 Phase가 이 위에 쌓인다.
@@ -205,16 +205,16 @@ Phase 11 직후 이어지는 소규모 Phase. 인증과 인가의 차이를 코�
   - ⚠️ 순서 노트: `findById`(404) → `verifyOwnership`(403) 순으로 없는 리소스는 항상 404 우선. LAZY `member` 프록시의 `getId()`는 FK에서 읽혀 추가 SELECT/초기화 없이 소유권 비교(OSIV=false 안전)
   - ⚠️ 소유권 403(`BusinessException`→`GlobalExceptionHandler`)과 필터 단계 403(`RestAccessDeniedHandler`)은 경로가 다르지만 둘 다 `code:"FORBIDDEN"`으로 일관
 
-### Phase 13: 실 DB(PostgreSQL) + Flyway + docker-compose + 프로파일·감사·soft delete
+### Phase 13: 실 DB(MySQL) + Flyway + docker-compose + 프로파일·감사·soft delete
 H2 인메모리 졸업(사용자 결정). Phase 9(프로파일/로깅/OSIV)를 여기에 합쳐 마무리.
-- [ ] `docker-compose.yml`로 PostgreSQL 기동
-- [ ] Flyway `V1__init.sql`로 누적 스키마 명시(ddl-auto 의존 탈피), `prod`는 `ddl-auto=validate`
-- [ ] 프로파일: `dev`(로컬 PG/H2), `prod`(PG + validate), `test`(Testcontainers/H2). Phase 9 항목(OSIV=false, `@Slf4j` 로깅, `GlobalExceptionHandler`의 `log.error`) 완료
+- [ ] `docker-compose.yml`로 MySQL 기동 (`mysql:8.4`, 포트 3306, `CHARSET=utf8mb4`/`utf8mb4_unicode_ci`, `MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD` env)
+- [ ] Flyway `V1__init.sql`로 누적 스키마 명시(ddl-auto 의존 탈피), `prod`는 `ddl-auto=validate`. PK는 `BIGINT AUTO_INCREMENT`(엔티티가 이미 `GenerationType.IDENTITY`), 타임스탬프는 `DATETIME(6)`, 테이블 옵션 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+- [ ] 프로파일: `dev`(로컬 MySQL/H2), `prod`(MySQL + validate), `test`(Testcontainers/H2). Phase 9 항목(OSIV=false, `@Slf4j` 로깅, `GlobalExceptionHandler`의 `log.error`) 완료
 - [ ] **감사**: `BaseTimeEntity` 확장(`@CreatedBy`/`@LastModifiedBy`), `AuditorAware`가 `SecurityContext`에서 현재 사용자 제공(Phase 11 의존)
 - [ ] **soft delete**: `@SQLRestriction` + `deletedAt` 컬럼. 기존 cascade REMOVE 정책 충돌 재설계 주의
 - [ ] **TDD**: soft delete가 핵심 — `@DataJpaTest` "삭제 후 findAll 미포함 / DB엔 잔존"(Red) → 구현(Green). Flyway는 컨텍스트 로딩 통합 테스트로 검증
-- **배우는 것**: `ddl-auto=validate`가 정석인 이유, 마이그레이션 툴 필요성, OSIV 트레이드오프, soft delete 장단점(유니크 제약/조회 필터 누락 위험), `AuditorAware`
-- **의존성**: `flyway-core`, `flyway-database-postgresql`, `org.postgresql:postgresql`
+- **배우는 것**: `ddl-auto=validate`가 정석인 이유, 마이그레이션 툴 필요성, OSIV 트레이드오프, soft delete 장단점(유니크 제약/조회 필터 누락 위험), `AuditorAware`. MySQL 실무 포인트 — `utf8mb4`(이모지/한글 보조문자 저장)와 collation, `DATETIME(6)` vs `TIMESTAMP`, MySQL은 시퀀스 미지원이라 `IDENTITY`(AUTO_INCREMENT)가 정답
+- **의존성**: `flyway-core`, `flyway-mysql`, `com.mysql:mysql-connector-j`
 - **검증**: docker-compose 기동 후 prod 프로필 부팅(validate 통과), soft delete 동작 확인
 
 ### Phase 14: QueryDSL 동적 검색 + 도메인 확장(카테고리/태그/좋아요)
@@ -238,13 +238,13 @@ API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지
 
 ### Phase 16: CI(GitHub Actions) + Testcontainers + 조회수 동시성/Redis 캐싱
 자동화와 실 DB 기반 테스트로 마무리. 동시성/캐싱을 인프라 성격으로 묶음.
-- [ ] Testcontainers로 통합 테스트를 실제 PostgreSQL에서 실행(H2 방언 차이 제거), `PostIntegrationTest`를 `@Testcontainers`로 전환
+- [ ] Testcontainers로 통합 테스트를 실제 MySQL에서 실행(H2 방언 차이 제거), `PostIntegrationTest`를 `@Testcontainers`로 전환
 - [ ] GitHub Actions: PR마다 `./gradlew test` + 빌드
 - [ ] **조회수 동시성**: 현재 `incrementViewCount()`는 dirty checking이라 동시 요청에 lost update → 비관적 락 / `@Modifying` 원자적 UPDATE / Redis INCR 중 택1
 - [ ] **Redis 캐싱**: 인기글/단건 조회 `@Cacheable` + TTL
 - [ ] **TDD**: 조회수 — 멀티스레드 N회 동시 조회 후 viewCount==N 통합 테스트(Red, 현재 실패) → 원자적 UPDATE/락(Green). 캐시는 "2번째 조회 시 쿼리 미발생"을 Hibernate Statistics로 검증(Phase 8 기법 재활용)
 - **배우는 것**: CI/CD 기본, Testcontainers가 H2보다 신뢰성 높은 이유, lost update와 동시성 제어(낙관/비관 락), 캐시 무효화 전략
-- **의존성**: `org.testcontainers:postgresql`/`junit-jupiter`, `spring-boot-starter-data-redis`
+- **의존성**: `org.testcontainers:mysql`/`junit-jupiter`, `spring-boot-starter-data-redis`
 - **검증**: 동시성 테스트 GREEN, GitHub Actions PR 체크 통과
 
 #### 우선순위 요약
