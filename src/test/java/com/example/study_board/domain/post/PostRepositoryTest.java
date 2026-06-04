@@ -1,9 +1,13 @@
 package com.example.study_board.domain.post;
 
+import com.example.study_board.domain.category.Category;
+import com.example.study_board.domain.category.CategoryRepository;
 import com.example.study_board.domain.comment.Comment;
 import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.member.Role;
+import com.example.study_board.domain.tag.Tag;
+import com.example.study_board.domain.tag.TagRepository;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.global.config.JpaAuditingConfig;
@@ -43,6 +47,12 @@ class PostRepositoryTest {
     private MemberRepository memberRepository;
 
     @Autowired
+    private CategoryRepository categoryRepository;
+
+    @Autowired
+    private TagRepository tagRepository;
+
+    @Autowired
     private EntityManager entityManager;
 
     private Member member;
@@ -77,6 +87,17 @@ class PostRepositoryTest {
                 .content(content)
                 .member(member)
                 .build();
+    }
+
+    private Post savePostWith(String title, Category category, String... tagNames) {
+        Post post = Post.builder().title(title).content("내용").member(member).build();
+        post.assignCategory(category);
+        for (String name : tagNames) {
+            Tag tag = tagRepository.findByName(name)
+                    .orElseGet(() -> tagRepository.save(Tag.builder().name(name).build()));
+            post.addTag(tag);
+        }
+        return postRepository.save(post); // cascade=PERSIST로 PostTag도 함께 저장
     }
 
     @Test
@@ -171,7 +192,7 @@ class PostRepositoryTest {
         postRepository.save(createPost("Spring Security", "내용3"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", null), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", null, null, null), pageable);
 
         assertThat(result.getContent()).hasSize(2);
         assertThat(result.getContent()).allMatch(post -> post.title().contains("Spring"));
@@ -184,7 +205,7 @@ class PostRepositoryTest {
         postRepository.save(createPost("제목2", "JPA는 어렵다"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", null), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", null, null, null), pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).title()).isEqualTo("제목1");
@@ -199,7 +220,7 @@ class PostRepositoryTest {
         postRepository.save(Post.builder().title("제목2").content("내용2").member(other).build());
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, "다른"), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, "다른", null, null), pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).authorName()).isEqualTo("다른작성자");
@@ -215,7 +236,7 @@ class PostRepositoryTest {
         postRepository.save(createPost("JPA", "내용3"));                                          // 작성자, Spring X
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", "작성자"), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", "작성자", null, null), pageable);
 
         assertThat(result.getContent()).hasSize(2); // "작성자" + "다른작성자" 모두 username에 "작성자" 포함
         assertThat(result.getContent()).allMatch(post -> post.title().contains("Spring"));
@@ -228,7 +249,7 @@ class PostRepositoryTest {
         postRepository.save(createPost("제목2", "내용2"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, null), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, null, null, null), pageable);
 
         assertThat(result.getContent()).hasSize(2);
         assertThat(result.getTotalElements()).isEqualTo(2);
@@ -244,10 +265,72 @@ class PostRepositoryTest {
         entityManager.clear();
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, null), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, null, null, null), pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).commentCount()).isEqualTo(2L);
+    }
+
+    @Test
+    @DisplayName("카테고리로 검색하면 해당 카테고리 글만 나오고 결과에 카테고리명이 담긴다")
+    void search_by_category() {
+        Category spring = categoryRepository.save(Category.builder().name("스프링").build());
+        Category jpa = categoryRepository.save(Category.builder().name("JPA").build());
+        savePostWith("스프링 글", spring);
+        savePostWith("JPA 글", jpa);
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result =
+                postRepository.search(new PostSearchCondition(null, null, spring.getId(), null), pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("스프링 글");
+        assertThat(result.getContent().get(0).categoryName()).isEqualTo("스프링");
+    }
+
+    @Test
+    @DisplayName("카테고리 없는 글도 전체 조회에 포함된다 (LEFT JOIN 검증)")
+    void search_includes_post_without_category() {
+        Category spring = categoryRepository.save(Category.builder().name("스프링").build());
+        savePostWith("카테고리 있음", spring);
+        postRepository.save(createPost("카테고리 없음", "내용")); // category == null
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result =
+                postRepository.search(new PostSearchCondition(null, null, null, null), pageable);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getContent())
+                .extracting(PostListResponse::categoryName)
+                .containsExactlyInAnyOrder("스프링", null);
+    }
+
+    @Test
+    @DisplayName("태그명으로 검색")
+    void search_by_tag() {
+        savePostWith("자바 글", null, "java", "spring");
+        savePostWith("파이썬 글", null, "python");
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result =
+                postRepository.search(new PostSearchCondition(null, null, null, "spring"), pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).title()).isEqualTo("자바 글");
+    }
+
+    @Test
+    @DisplayName("여러 태그를 가진 글도 태그 검색 시 한 건으로 집계된다 (distinct)")
+    void search_by_tag_no_duplicate() {
+        savePostWith("멀티태그 글", null, "java", "spring", "jpa");
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result =
+                postRepository.search(new PostSearchCondition(null, null, null, "java"), pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getTotalElements()).isEqualTo(1);
     }
 
     @Test
@@ -256,7 +339,7 @@ class PostRepositoryTest {
         postRepository.save(createPost("제목", "내용"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("없는키워드", null), pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("없는키워드", null, null, null), pageable);
 
         assertThat(result.getContent()).isEmpty();
         assertThat(result.getTotalElements()).isZero();

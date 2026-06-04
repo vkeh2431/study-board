@@ -1,7 +1,10 @@
 package com.example.study_board.domain.post;
 
+import com.example.study_board.domain.category.QCategory;
 import com.example.study_board.domain.comment.QComment;
 import com.example.study_board.domain.member.QMember;
+import com.example.study_board.domain.tag.QPostTag;
+import com.example.study_board.domain.tag.QTag;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostSearchCondition;
 import com.querydsl.core.types.Order;
@@ -42,12 +45,18 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
         QPost post = QPost.post;
         QComment comment = QComment.comment;
         QMember member = QMember.member;
+        QCategory category = QCategory.category;
+        QPostTag postTag = QPostTag.postTag;
+        QTag tag = QTag.tag;
 
-        List<PostListResponse> content = queryFactory
+        boolean filterByTag = condition.tag() != null && !condition.tag().isBlank();
+
+        JPAQuery<PostListResponse> contentQuery = queryFactory
                 .select(Projections.constructor(PostListResponse.class,
                         post.id,
                         post.title,
                         member.username,
+                        category.name,
                         post.viewCount,
                         JPAExpressions.select(comment.count())
                                 .from(comment)
@@ -55,20 +64,34 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                         post.createdAt))
                 .from(post)
                 .join(post.member, member)
-                .where(
-                        keywordContains(condition.keyword()),
-                        authorContains(condition.author()))
+                .leftJoin(post.category, category); // nullable → LEFT (무카테고리 글 누락 방지)
+
+        JPAQuery<Long> countQuery = filterByTag
+                ? queryFactory.select(post.countDistinct()).from(post)
+                : queryFactory.select(post.count()).from(post);
+
+        if (filterByTag) {
+            // 태그 조건이 있을 때만 join (항상 join하면 태그 없는 글이 누락). 한 글이 여러 태그를 가질 수 있어 distinct.
+            contentQuery.join(post.postTags, postTag).join(postTag.tag, tag)
+                    .where(tag.name.eq(condition.tag())).distinct();
+            countQuery.join(post.postTags, postTag).join(postTag.tag, tag)
+                    .where(tag.name.eq(condition.tag()));
+        }
+
+        BooleanExpression[] predicates = {
+                keywordContains(condition.keyword()),
+                authorContains(condition.author()),
+                categoryIdEq(condition.categoryId())
+        };
+
+        List<PostListResponse> content = contentQuery
+                .where(predicates)
                 .orderBy(toOrderSpecifiers(pageable.getSort()))
                 .offset(pageable.getOffset())
                 .limit(pageable.getPageSize())
                 .fetch();
 
-        JPAQuery<Long> countQuery = queryFactory
-                .select(post.count())
-                .from(post)
-                .where(
-                        keywordContains(condition.keyword()),
-                        authorContains(condition.author()));
+        countQuery.where(predicates);
 
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
@@ -85,6 +108,10 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
             return null;
         }
         return QPost.post.member.username.contains(author);
+    }
+
+    private BooleanExpression categoryIdEq(Long categoryId) {
+        return (categoryId == null) ? null : QPost.post.category.id.eq(categoryId);
     }
 
     /**

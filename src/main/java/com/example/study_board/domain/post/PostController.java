@@ -42,8 +42,10 @@ public class PostController {
     public ResponseEntity<Page<PostListResponse>> findAll(
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String author,
+            @RequestParam(required = false) Long categoryId,
+            @RequestParam(required = false) String tag,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        PostSearchCondition condition = new PostSearchCondition(keyword, author);
+        PostSearchCondition condition = new PostSearchCondition(keyword, author, categoryId, tag);
         Page<PostListResponse> responses = postService.findAll(condition, pageable);
         return ResponseEntity.ok(responses);
     }

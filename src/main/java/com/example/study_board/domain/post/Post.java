@@ -1,8 +1,11 @@
 package com.example.study_board.domain.post;
 
 import com.example.study_board.common.BaseTimeEntity;
+import com.example.study_board.domain.category.Category;
 import com.example.study_board.domain.comment.Comment;
 import com.example.study_board.domain.member.Member;
+import com.example.study_board.domain.tag.PostTag;
+import com.example.study_board.domain.tag.Tag;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -38,11 +41,20 @@ public class Post extends BaseTimeEntity {
     @JoinColumn(name = "member_id", nullable = false)
     private Member member;
 
+    // nullable: 기존 게시글 호환 + 카테고리 미지정 허용. 동적 검색 projection은 LEFT JOIN으로 읽어야 누락이 없다.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "category_id")
+    private Category category;
+
     @Column(nullable = false)
     private int viewCount;
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.REMOVE)
     private List<Comment> comments = new ArrayList<>();
+
+    // cascade=PERSIST + orphanRemoval만 둔다(REMOVE 제외). Post가 soft delete돼도 PostTag는 cascade되지 않아 잔존한다.
+    @OneToMany(mappedBy = "post", cascade = CascadeType.PERSIST, orphanRemoval = true)
+    private List<PostTag> postTags = new ArrayList<>();
 
     private LocalDateTime deletedAt;
 
@@ -76,5 +88,21 @@ public class Post extends BaseTimeEntity {
     public void addComment(Comment comment) {
         this.comments.add(comment);
         comment.assignPost(this);
+    }
+
+    public void assignCategory(Category category) {
+        this.category = category;
+    }
+
+    /** 태그 부착(중간 엔티티 생성). cascade=PERSIST로 Post 저장 시 함께 영속화된다. */
+    public void addTag(Tag tag) {
+        this.postTags.add(PostTag.builder().post(this).tag(tag).build());
+    }
+
+    /** 부착된 태그명 목록(상세 응답용). 단건 조회라 LAZY 로딩이어도 N+1 무관. */
+    public List<String> getTagNames() {
+        return postTags.stream()
+                .map(postTag -> postTag.getTag().getName())
+                .toList();
     }
 }

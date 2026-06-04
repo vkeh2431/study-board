@@ -73,7 +73,7 @@ class PostQueryPerformanceTest {
         // pageSize(2) < 전체(5)라 PageableExecutionUtils가 count 쿼리를 생략하지 않는다.
         PageRequest pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Page<PostListResponse> posts = postRepository.search(new PostSearchCondition(null, null), pageable);
+        Page<PostListResponse> posts = postRepository.search(new PostSearchCondition(null, null, null, null), pageable);
 
         assertThat(posts.getContent()).hasSize(2);
         assertThat(posts.getTotalElements()).isEqualTo(5);

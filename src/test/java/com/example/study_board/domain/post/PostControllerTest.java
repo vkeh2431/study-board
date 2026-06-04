@@ -65,7 +65,7 @@ class PostControllerTest {
     void findAll_with_default_pagination() throws Exception {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<PostListResponse> content = List.of(
-                new PostListResponse(1L, "제목1", "작성자1", 0, 0L, LocalDateTime.now())
+                new PostListResponse(1L, "제목1", "작성자1", null, 0, 0L, LocalDateTime.now())
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
@@ -84,7 +84,7 @@ class PostControllerTest {
     void findAll_with_keyword() throws Exception {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<PostListResponse> content = List.of(
-                new PostListResponse(1L, "Spring Boot 입문", "작성자", 0, 0L, LocalDateTime.now())
+                new PostListResponse(1L, "Spring Boot 입문", "작성자", null, 0, 0L, LocalDateTime.now())
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
@@ -101,7 +101,7 @@ class PostControllerTest {
     void findAll_with_custom_page_and_size() throws Exception {
         PageRequest pageable = PageRequest.of(1, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
         List<PostListResponse> content = List.of(
-                new PostListResponse(6L, "제목6", "작성자", 0, 0L, LocalDateTime.now())
+                new PostListResponse(6L, "제목6", "작성자", null, 0, 0L, LocalDateTime.now())
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 10);
 
@@ -120,8 +120,8 @@ class PostControllerTest {
     @DisplayName("게시글 생성")
     @WithMockCustomUser
     void create_post() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("제목", "내용");
-        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", 0,
+        PostCreateRequest request = new PostCreateRequest("제목", "내용", null, null);
+        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 0,
                 LocalDateTime.now(), LocalDateTime.now());
 
         given(postService.create(eq(1L), any(PostCreateRequest.class))).willReturn(response);
@@ -138,7 +138,7 @@ class PostControllerTest {
     @Test
     @DisplayName("인증 없이 게시글 생성 시 401")
     void create_post_unauthenticated() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("제목", "내용");
+        PostCreateRequest request = new PostCreateRequest("제목", "내용", null, null);
 
         mockMvc.perform(post("/api/posts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -151,7 +151,7 @@ class PostControllerTest {
     @DisplayName("게시글 생성 시 제목이 비어있으면 400 에러")
     @WithMockCustomUser
     void create_post_validation_fail() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("", "내용");
+        PostCreateRequest request = new PostCreateRequest("", "내용", null, null);
 
         mockMvc.perform(post("/api/posts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -163,7 +163,7 @@ class PostControllerTest {
     @Test
     @DisplayName("게시글 단건 조회")
     void find_post_by_id() throws Exception {
-        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", 1,
+        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 1,
                 LocalDateTime.now(), LocalDateTime.now());
 
         given(postService.findById(1L)).willReturn(response);
@@ -190,8 +190,8 @@ class PostControllerTest {
     @DisplayName("게시글 수정")
     @WithMockCustomUser
     void update_post() throws Exception {
-        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
-        PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", 0,
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용", null, null);
+        PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", null, List.of(), 0,
                 LocalDateTime.now(), LocalDateTime.now());
 
         given(postService.update(eq(1L), eq(1L), eq(Role.USER), any(PostUpdateRequest.class))).willReturn(response);
@@ -208,7 +208,7 @@ class PostControllerTest {
     @DisplayName("작성자가 아닌 사용자가 수정하면 403")
     @WithMockCustomUser(memberId = 2L)
     void update_post_forbidden() throws Exception {
-        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용", null, null);
 
         given(postService.update(eq(1L), eq(2L), eq(Role.USER), any(PostUpdateRequest.class)))
                 .willThrow(new ForbiddenException());
@@ -224,7 +224,7 @@ class PostControllerTest {
     @DisplayName("게시글 수정 시 제목이 비어있으면 400 에러")
     @WithMockCustomUser
     void update_post_validation_fail() throws Exception {
-        PostUpdateRequest request = new PostUpdateRequest("", "내용");
+        PostUpdateRequest request = new PostUpdateRequest("", "내용", null, null);
 
         mockMvc.perform(put("/api/posts/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -237,7 +237,7 @@ class PostControllerTest {
     @DisplayName("게시글 수정 시 게시글이 없으면 404")
     @WithMockCustomUser
     void update_post_not_found() throws Exception {
-        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용");
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용", null, null);
 
         given(postService.update(eq(999L), eq(1L), eq(Role.USER), any(PostUpdateRequest.class)))
                 .willThrow(new ResourceNotFoundException("Post", 999L));

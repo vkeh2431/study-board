@@ -1,5 +1,7 @@
 package com.example.study_board.integration;
 
+import com.example.study_board.domain.category.Category;
+import com.example.study_board.domain.category.CategoryRepository;
 import com.example.study_board.domain.comment.CommentRepository;
 import com.example.study_board.domain.post.PostRepository;
 import com.example.study_board.dto.auth.LoginRequest;
@@ -25,7 +27,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -50,6 +55,9 @@ class PostIntegrationTest {
 
     @Autowired
     private CommentRepository commentRepository;
+
+    @Autowired
+    private CategoryRepository categoryRepository;
 
     private String accessToken;
 
@@ -77,7 +85,11 @@ class PostIntegrationTest {
     }
 
     private Long createPostViaApi(String title, String content) throws Exception {
-        PostCreateRequest request = new PostCreateRequest(title, content);
+        return createPostViaApi(title, content, null, null);
+    }
+
+    private Long createPostViaApi(String title, String content, Long categoryId, List<String> tagNames) throws Exception {
+        PostCreateRequest request = new PostCreateRequest(title, content, categoryId, tagNames);
         MvcResult result = mockMvc.perform(post("/api/posts")
                         .header("Authorization", "Bearer " + accessToken)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -105,7 +117,7 @@ class PostIntegrationTest {
     @Test
     @DisplayName("인증 없이 게시글 작성 시 401")
     void create_post_unauthenticated_returns_401() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("제목", "내용");
+        PostCreateRequest request = new PostCreateRequest("제목", "내용", null, null);
 
         mockMvc.perform(post("/api/posts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -118,7 +130,7 @@ class PostIntegrationTest {
     @DisplayName("게시글 수정 후 변경된 내용이 조회됨")
     void update_post_full_flow() throws Exception {
         Long postId = createPostViaApi("기존 제목", "기존 내용");
-        PostUpdateRequest updateRequest = new PostUpdateRequest("수정된 제목", "수정된 내용");
+        PostUpdateRequest updateRequest = new PostUpdateRequest("수정된 제목", "수정된 내용", null, null);
 
         mockMvc.perform(put("/api/posts/" + postId)
                         .header("Authorization", "Bearer " + accessToken)
@@ -139,7 +151,7 @@ class PostIntegrationTest {
     void update_post_by_other_user_returns_403() throws Exception {
         Long postId = createPostViaApi("제목", "내용");
         String otherToken = signupAndLogin("other@example.com", "다른사람", "password123");
-        PostUpdateRequest request = new PostUpdateRequest("해킹 제목", "해킹 내용");
+        PostUpdateRequest request = new PostUpdateRequest("해킹 제목", "해킹 내용", null, null);
 
         mockMvc.perform(put("/api/posts/" + postId)
                         .header("Authorization", "Bearer " + otherToken)
@@ -189,6 +201,30 @@ class PostIntegrationTest {
 
         assertThat(postRepository.findById(postId)).isEmpty();
         assertThat(commentRepository.findByPostIdOrderByCreatedAtDesc(postId)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("카테고리·태그와 함께 작성하면 상세 조회에 노출된다")
+    void create_with_category_and_tags_full_flow() throws Exception {
+        Long categoryId = categoryRepository.save(Category.builder().name("스프링").build()).getId();
+        Long postId = createPostViaApi("제목", "내용", categoryId, List.of("java", "spring"));
+
+        mockMvc.perform(get("/api/posts/" + postId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.categoryName").value("스프링"))
+                .andExpect(jsonPath("$.tagNames", containsInAnyOrder("java", "spring")));
+    }
+
+    @Test
+    @DisplayName("태그로 목록 검색")
+    void search_posts_by_tag() throws Exception {
+        createPostViaApi("자바 글", "내용", null, List.of("java"));
+        createPostViaApi("파이썬 글", "내용", null, List.of("python"));
+
+        mockMvc.perform(get("/api/posts").param("tag", "java"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].title").value("자바 글"));
     }
 
     @Test
