@@ -228,6 +228,78 @@ class PostIntegrationTest {
     }
 
     @Test
+    @DisplayName("좋아요 후 상세 조회 시 likeCount=1, 본인은 liked=true")
+    void like_post_full_flow() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+
+        mockMvc.perform(post("/api/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/posts/" + postId)
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.liked").value(true));
+    }
+
+    @Test
+    @DisplayName("같은 사용자가 두 번 좋아요하면 409(ALREADY_LIKED)")
+    void like_twice_returns_409() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+        mockMvc.perform(post("/api/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value(ErrorCode.ALREADY_LIKED.getCode()));
+    }
+
+    @Test
+    @DisplayName("좋아요 취소 후 likeCount=0")
+    void unlike_post_full_flow() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+        mockMvc.perform(post("/api/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(delete("/api/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isNoContent());
+
+        mockMvc.perform(get("/api/posts/" + postId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.likeCount").value(0))
+                .andExpect(jsonPath("$.liked").value(false));
+    }
+
+    @Test
+    @DisplayName("비로그인 상세 조회는 liked=false")
+    void anonymous_detail_liked_false() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+        mockMvc.perform(post("/api/posts/" + postId + "/likes")
+                        .header("Authorization", "Bearer " + accessToken))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(get("/api/posts/" + postId)) // 토큰 없이
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.likeCount").value(1))
+                .andExpect(jsonPath("$.liked").value(false));
+    }
+
+    @Test
+    @DisplayName("인증 없이 좋아요하면 401")
+    void like_unauthenticated_returns_401() throws Exception {
+        Long postId = createPostViaApi("제목", "내용");
+
+        mockMvc.perform(post("/api/posts/" + postId + "/likes"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value(ErrorCode.UNAUTHORIZED.getCode()));
+    }
+
+    @Test
     @DisplayName("존재하지 않는 게시글 조회 시 404")
     void find_post_not_found_returns_404() throws Exception {
         mockMvc.perform(get("/api/posts/999999"))

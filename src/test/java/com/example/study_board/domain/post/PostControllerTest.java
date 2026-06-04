@@ -121,7 +121,7 @@ class PostControllerTest {
     @WithMockCustomUser
     void create_post() throws Exception {
         PostCreateRequest request = new PostCreateRequest("제목", "내용", null, null);
-        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 0,
+        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 0, 0L, false,
                 LocalDateTime.now(), LocalDateTime.now());
 
         given(postService.create(eq(1L), any(PostCreateRequest.class))).willReturn(response);
@@ -163,10 +163,10 @@ class PostControllerTest {
     @Test
     @DisplayName("게시글 단건 조회")
     void find_post_by_id() throws Exception {
-        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 1,
+        PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 1, 0L, false,
                 LocalDateTime.now(), LocalDateTime.now());
 
-        given(postService.findById(1L)).willReturn(response);
+        given(postService.findById(eq(1L), any())).willReturn(response);
 
         mockMvc.perform(get("/api/posts/1"))
                 .andExpect(status().isOk())
@@ -178,7 +178,7 @@ class PostControllerTest {
     @Test
     @DisplayName("게시글 단건 조회 시 게시글이 없으면 404")
     void find_post_by_id_not_found() throws Exception {
-        given(postService.findById(999L))
+        given(postService.findById(eq(999L), any()))
                 .willThrow(new ResourceNotFoundException("Post", 999L));
 
         mockMvc.perform(get("/api/posts/999"))
@@ -191,7 +191,7 @@ class PostControllerTest {
     @WithMockCustomUser
     void update_post() throws Exception {
         PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용", null, null);
-        PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", null, List.of(), 0,
+        PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", null, List.of(), 0, 0L, false,
                 LocalDateTime.now(), LocalDateTime.now());
 
         given(postService.update(eq(1L), eq(1L), eq(Role.USER), any(PostUpdateRequest.class))).willReturn(response);

@@ -2,6 +2,7 @@ package com.example.study_board.domain.post;
 
 import com.example.study_board.domain.category.Category;
 import com.example.study_board.domain.category.CategoryRepository;
+import com.example.study_board.domain.like.PostLikeRepository;
 import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.member.Role;
@@ -52,6 +53,9 @@ class PostServiceTest {
 
     @Mock
     private TagRepository tagRepository;
+
+    @Mock
+    private PostLikeRepository postLikeRepository;
 
     @InjectMocks
     private PostService postService;
@@ -176,7 +180,7 @@ class PostServiceTest {
 
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
 
-        PostResponse response = postService.findById(1L);
+        PostResponse response = postService.findById(1L, null);
 
         assertThat(response.title()).isEqualTo("제목");
         assertThat(response.viewCount()).isEqualTo(1);
@@ -188,8 +192,22 @@ class PostServiceTest {
     void find_post_by_id_not_found() {
         given(postRepository.findById(999L)).willReturn(Optional.empty());
 
-        assertThatThrownBy(() -> postService.findById(999L))
+        assertThatThrownBy(() -> postService.findById(999L, null))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    @DisplayName("단건 조회 시 좋아요 수와 현재 사용자의 좋아요 여부가 담긴다")
+    void find_post_by_id_with_like_info() {
+        Post post = createPost("제목", "내용", "작성자");
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+        given(postLikeRepository.countByPostId(1L)).willReturn(3L);
+        given(postLikeRepository.existsByMemberIdAndPostId(7L, 1L)).willReturn(true);
+
+        PostResponse response = postService.findById(1L, 7L);
+
+        assertThat(response.likeCount()).isEqualTo(3L);
+        assertThat(response.liked()).isTrue();
     }
 
     @Test

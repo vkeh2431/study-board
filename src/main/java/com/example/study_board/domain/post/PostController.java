@@ -33,8 +33,12 @@ public class PostController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<PostResponse> findById(@PathVariable Long id) {
-        PostResponse response = postService.findById(id);
+    public ResponseEntity<PostResponse> findById(
+            @PathVariable Long id,
+            @AuthenticationPrincipal CustomUserDetails principal) {
+        // GET은 permitAll이라 비로그인 접근 가능 → principal이 null일 수 있다(liked=false)
+        Long memberId = (principal != null) ? principal.getMemberId() : null;
+        PostResponse response = postService.findById(id, memberId);
         return ResponseEntity.ok(response);
     }
 

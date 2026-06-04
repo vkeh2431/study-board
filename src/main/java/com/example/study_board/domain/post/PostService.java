@@ -2,6 +2,7 @@ package com.example.study_board.domain.post;
 
 import com.example.study_board.domain.category.Category;
 import com.example.study_board.domain.category.CategoryRepository;
+import com.example.study_board.domain.like.PostLikeRepository;
 import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.member.Role;
@@ -37,6 +38,7 @@ public class PostService {
     private final MemberRepository memberRepository;
     private final CategoryRepository categoryRepository;
     private final TagRepository tagRepository;
+    private final PostLikeRepository postLikeRepository;
 
     @Transactional
     public PostResponse create(Long memberId, PostCreateRequest request) {
@@ -51,15 +53,17 @@ public class PostService {
         applyTags(post, request.tagNames());
         Post saved = postRepository.save(post); // cascade=PERSIST로 PostTag도 함께 저장
         log.info("게시글 생성 완료: id={}, author={}", saved.getId(), member.getUsername());
-        return PostResponse.from(saved);
+        return PostResponse.of(saved, 0L, false); // 갓 생성된 글: 좋아요 0, 미좋아요
     }
 
     @Transactional
-    public PostResponse findById(Long id) {
+    public PostResponse findById(Long id, Long memberId) {
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Post", id));
         post.incrementViewCount();
-        return PostResponse.from(post);
+        long likeCount = postLikeRepository.countByPostId(id);
+        boolean liked = memberId != null && postLikeRepository.existsByMemberIdAndPostId(memberId, id);
+        return PostResponse.of(post, likeCount, liked);
     }
 
     public Page<PostListResponse> findAll(PostSearchCondition condition, Pageable pageable) {
@@ -77,7 +81,9 @@ public class PostService {
         applyCategory(post, request.categoryId());
         applyTags(post, request.tagNames());
         log.info("게시글 수정 완료: id={}", id);
-        return PostResponse.from(post);
+        long likeCount = postLikeRepository.countByPostId(id);
+        boolean liked = postLikeRepository.existsByMemberIdAndPostId(memberId, id);
+        return PostResponse.of(post, likeCount, liked);
     }
 
     @Transactional
