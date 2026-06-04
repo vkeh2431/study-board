@@ -71,10 +71,6 @@ public class Post extends BaseTimeEntity {
         this.content = content;
     }
 
-    public void incrementViewCount() {
-        this.viewCount++;
-    }
-
     /**
      * 주어진 회원이 이 게시글의 작성자인지 판별한다(소유권 인가, Phase 12).
      * LAZY {@code member} 프록시의 식별자는 FK에서 읽히므로 추가 SELECT 없이 비교한다.

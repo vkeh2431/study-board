@@ -37,3 +37,6 @@ out/
 .vscode/
 /PLAN_2.md
 /PLAN_3.md
+
+# Claude Code local files
+.claude/

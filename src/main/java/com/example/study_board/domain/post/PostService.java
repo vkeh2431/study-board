@@ -58,9 +58,14 @@ public class PostService {
 
     @Transactional
     public PostResponse findById(Long id, Long memberId) {
+        // 조회수는 DB에서 원자적으로 증가시킨다(동시 요청 lost update 방지, Phase 16).
+        // UPDATE 먼저 → 영향 행 0이면 없거나 soft-deleted → 404. 그 후 fresh read로 증가된 값을 읽는다.
+        int updated = postRepository.incrementViewCount(id);
+        if (updated == 0) {
+            throw new ResourceNotFoundException("Post", id);
+        }
         Post post = postRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Post", id));
-        post.incrementViewCount();
         long likeCount = postLikeRepository.countByPostId(id);
         boolean liked = memberId != null && postLikeRepository.existsByMemberIdAndPostId(memberId, id);
         return PostResponse.of(post, likeCount, liked);

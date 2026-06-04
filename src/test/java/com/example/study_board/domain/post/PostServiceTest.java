@@ -35,6 +35,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -175,32 +176,36 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("게시글 단건 조회 시 조회수 증가")
+    @DisplayName("게시글 단건 조회 시 조회수를 원자적으로 증가시키고 증가된 값을 반환한다")
     void find_post_by_id() {
         Post post = createPost("제목", "내용", "작성자");
+        ReflectionTestUtils.setField(post, "viewCount", 1); // DB 원자적 증가 후 fresh read를 시뮬레이션
 
+        given(postRepository.incrementViewCount(1L)).willReturn(1);
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
 
         PostResponse response = postService.findById(1L, null);
 
         assertThat(response.title()).isEqualTo("제목");
         assertThat(response.viewCount()).isEqualTo(1);
-        assertThat(post.getViewCount()).isEqualTo(1);
+        verify(postRepository).incrementViewCount(1L);
     }
 
     @Test
-    @DisplayName("게시글 단건 조회 시 게시글이 없으면 예외 발생")
+    @DisplayName("단건 조회 시 영향 행이 0이면(없거나 soft-deleted) 404 예외 + 조회 생략")
     void find_post_by_id_not_found() {
-        given(postRepository.findById(999L)).willReturn(Optional.empty());
+        given(postRepository.incrementViewCount(999L)).willReturn(0);
 
         assertThatThrownBy(() -> postService.findById(999L, null))
                 .isInstanceOf(ResourceNotFoundException.class);
+        verify(postRepository, never()).findById(anyLong());
     }
 
     @Test
     @DisplayName("단건 조회 시 좋아요 수와 현재 사용자의 좋아요 여부가 담긴다")
     void find_post_by_id_with_like_info() {
         Post post = createPost("제목", "내용", "작성자");
+        given(postRepository.incrementViewCount(1L)).willReturn(1);
         given(postRepository.findById(1L)).willReturn(Optional.of(post));
         given(postLikeRepository.countByPostId(1L)).willReturn(3L);
         given(postLikeRepository.existsByMemberIdAndPostId(7L, 1L)).willReturn(true);
