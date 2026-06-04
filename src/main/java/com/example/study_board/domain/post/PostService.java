@@ -19,6 +19,8 @@ import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -40,6 +42,16 @@ public class PostService {
     private final TagRepository tagRepository;
     private final PostLikeRepository postLikeRepository;
 
+    /**
+     * 인기글 목록 캐시 이름(CacheConfig에서 TTL 5분). 쓰기(create/update/delete) 시 전체 무효화한다.
+     * 단일 키 리스트 캐시라 선택 무효화가 불가능해 {@code allEntries=true}로 비운다.
+     * {@code beforeInvocation=true}: 기본(afterInvocation)은 트랜잭션 인지 캐시가 커밋 이후로 무효화를 미뤄
+     * 결정적이지 않다. 쓰기 전에 즉시 무효화하면 확실하다 — 짧은 staleness 창은 5분 TTL로 수렴하므로 허용.
+     */
+    private static final String POPULAR_POSTS_CACHE = "popularPosts";
+    private static final int POPULAR_POSTS_LIMIT = 10;
+
+    @CacheEvict(value = POPULAR_POSTS_CACHE, allEntries = true, beforeInvocation = true)
     @Transactional
     public PostResponse create(Long memberId, PostCreateRequest request) {
         Member member = memberRepository.findById(memberId)
@@ -77,6 +89,17 @@ public class PostService {
         return postRepository.search(condition, pageable);
     }
 
+    /**
+     * 조회수 상위 인기글 목록(Phase 16: Redis 캐싱). 모든 사용자에게 동일하고 읽기 부하가 커 캐시에 적합하다.
+     * 단건 조회({@code findById})는 호출마다 조회수를 증가시키고 사용자별 {@code liked}가 달라 캐싱하지 않는다.
+     */
+    @Cacheable(POPULAR_POSTS_CACHE)
+    public List<PostListResponse> findPopular() {
+        log.debug("인기글 목록 조회(캐시 미스 → DB)");
+        return postRepository.findPopular(POPULAR_POSTS_LIMIT);
+    }
+
+    @CacheEvict(value = POPULAR_POSTS_CACHE, allEntries = true, beforeInvocation = true)
     @Transactional
     public PostResponse update(Long id, Long memberId, Role role, PostUpdateRequest request) {
         Post post = postRepository.findById(id)
@@ -91,6 +114,7 @@ public class PostService {
         return PostResponse.of(post, likeCount, liked);
     }
 
+    @CacheEvict(value = POPULAR_POSTS_CACHE, allEntries = true, beforeInvocation = true)
     @Transactional
     public void delete(Long id, Long memberId, Role role) {
         Post post = postRepository.findById(id)

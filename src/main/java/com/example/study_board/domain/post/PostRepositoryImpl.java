@@ -102,6 +102,38 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
         return PageableExecutionUtils.getPage(content, pageable, countQuery::fetchOne);
     }
 
+    @Override
+    public List<PostListResponse> findPopular(int limit) {
+        QPost post = QPost.post;
+        QComment comment = QComment.comment;
+        QPostLike postLike = QPostLike.postLike;
+        QMember member = QMember.member;
+        QCategory category = QCategory.category;
+
+        // search()와 동일한 projection(댓글·좋아요 상관 COUNT 서브쿼리 인라인)으로 조회수 상위 N개를 가져온다.
+        // 페이징 없이 limit만 적용. 동점 시 id desc로 안정 정렬.
+        return queryFactory
+                .select(Projections.constructor(PostListResponse.class,
+                        post.id,
+                        post.title,
+                        member.username,
+                        category.name,
+                        post.viewCount,
+                        JPAExpressions.select(comment.count())
+                                .from(comment)
+                                .where(comment.post.eq(post)),
+                        JPAExpressions.select(postLike.count())
+                                .from(postLike)
+                                .where(postLike.post.eq(post)),
+                        post.createdAt))
+                .from(post)
+                .join(post.member, member)
+                .leftJoin(post.category, category)
+                .orderBy(post.viewCount.desc(), post.id.desc())
+                .limit(limit)
+                .fetch();
+    }
+
     private BooleanExpression keywordContains(String keyword) {
         if (keyword == null || keyword.isBlank()) {
             return null; // null이면 where에서 무시된다

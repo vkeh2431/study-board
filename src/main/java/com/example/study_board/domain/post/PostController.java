@@ -19,6 +19,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @Tag(name = "게시글", description = "게시글 CRUD 및 검색. 조회는 공개, 쓰기는 인증 필요")
 @RestController
 @RequestMapping("/api/posts")
@@ -45,6 +47,13 @@ public class PostController {
         Long memberId = (principal != null) ? principal.getMemberId() : null;
         PostResponse response = postService.findById(id, memberId);
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "인기 게시글 목록", description = "조회수 상위 게시글을 Redis에 캐싱하여 반환한다(TTL 5분, 쓰기 시 무효화).")
+    @GetMapping("/popular")
+    public ResponseEntity<List<PostListResponse>> findPopular() {
+        // 정적 경로라 /{id}보다 우선 매칭된다(Spring이 더 구체적인 패턴을 선택).
+        return ResponseEntity.ok(postService.findPopular());
     }
 
     @Operation(summary = "게시글 목록/검색", description = "키워드/작성자/카테고리/태그로 동적 검색하고 페이징한다.")

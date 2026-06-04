@@ -2,6 +2,7 @@ package com.example.study_board.dto.post;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 
 /**
@@ -35,5 +36,6 @@ public record PostListResponse(
 
         @Schema(description = "작성 일시")
         LocalDateTime createdAt
-) {
+) implements Serializable {
+    // Redis 캐싱(Phase 16) 시 기본 JDK 직렬화를 쓰므로 Serializable. 모든 필드도 직렬화 가능(LocalDateTime 포함).
 }

@@ -187,6 +187,21 @@ class PostControllerTest {
     }
 
     @Test
+    @DisplayName("인기글 목록 조회 (/popular는 /{id}보다 우선 매칭)")
+    void find_popular_posts() throws Exception {
+        given(postService.findPopular()).willReturn(List.of(
+                new PostListResponse(1L, "인기글", "작성자", null, 100, 5L, 10L, LocalDateTime.now())));
+
+        mockMvc.perform(get("/api/posts/popular"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$[0].title").value("인기글"))
+                .andExpect(jsonPath("$[0].viewCount").value(100));
+
+        verify(postService).findPopular();
+    }
+
+    @Test
     @DisplayName("게시글 수정")
     @WithMockCustomUser
     void update_post() throws Exception {

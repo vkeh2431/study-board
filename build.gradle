@@ -43,6 +43,11 @@ dependencies {
     // Boot 4(Spring 7 + Jackson 3 = tools.jackson)를 지원하는 3.0.x 계열을 명시 버전으로 고정한다
     // (Spring 의존성 관리 BOM이 springdoc 버전을 관리하지 않음).
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
+    // Phase 16: Redis 캐싱(@Cacheable + TTL).
+    // ⚠️ Boot 4는 자동설정이 모듈로 분리되어, data-redis 스타터만으론 캐시 자동설정(CacheManager 선택)이 없다.
+    //    starter-cache가 캐시 자동설정(spring.cache.type에 따라 Redis/simple 선택)을 제공해야 @Cacheable이 동작한다.
+    implementation 'org.springframework.boot:spring-boot-starter-cache'
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.projectlombok:lombok'
