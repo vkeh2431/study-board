@@ -32,6 +32,13 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-flyway'
     implementation 'org.flywaydb:flyway-mysql'
     runtimeOnly 'com.mysql:mysql-connector-j'
+    // Phase 14: QueryDSL 동적 검색. 정통 com.querydsl 5.x/OpenFeign 6.x는 Hibernate 6.x/JPA 3.1 기준이라
+    // Boot 4(Hibernate 7.2 + jakarta.persistence 3.2)에서 첫 동적쿼리 실행 시 NoSuchMethodError 위험.
+    // OpenFeign 포크 7.2(Hibernate 7.x + JPA 3.2 대응)를 쓴다. 패키지는 com.querydsl.* 로 동일.
+    implementation 'io.github.openfeign.querydsl:querydsl-jpa:7.2'
+    annotationProcessor 'io.github.openfeign.querydsl:querydsl-apt:7.2:jakarta' // :jakarta classifier 필수
+    annotationProcessor 'jakarta.persistence:jakarta.persistence-api'           // 버전은 Boot BOM이 관리
+    annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.projectlombok:lombok'

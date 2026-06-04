@@ -6,6 +6,7 @@ import com.example.study_board.domain.member.Role;
 import com.example.study_board.domain.post.Post;
 import com.example.study_board.domain.post.PostRepository;
 import com.example.study_board.global.config.JpaAuditingConfig;
+import com.example.study_board.global.config.QueryDslConfig;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,7 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@Import(JpaAuditingConfig.class)
+@Import({JpaAuditingConfig.class, QueryDslConfig.class})
 @ActiveProfiles("test")
 class CommentRepositoryTest {
 

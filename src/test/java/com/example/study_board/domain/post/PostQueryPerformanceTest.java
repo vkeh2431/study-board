@@ -4,7 +4,9 @@ import com.example.study_board.domain.comment.Comment;
 import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.Role;
 import com.example.study_board.dto.post.PostListResponse;
+import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.global.config.JpaAuditingConfig;
+import com.example.study_board.global.config.QueryDslConfig;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import org.hibernate.Session;
@@ -23,7 +25,7 @@ import org.springframework.test.context.ActiveProfiles;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@Import(JpaAuditingConfig.class)
+@Import({JpaAuditingConfig.class, QueryDslConfig.class})
 @ActiveProfiles("test")
 class PostQueryPerformanceTest {
 
@@ -66,16 +68,17 @@ class PostQueryPerformanceTest {
     }
 
     @Test
-    @DisplayName("게시글 목록 조회 시 댓글 카운트를 위한 N+1이 발생하지 않는다")
-    void findAll_does_not_trigger_n_plus_1() {
-        PageRequest pageable = PageRequest.of(0, 5, Sort.by(Sort.Direction.DESC, "createdAt"));
+    @DisplayName("동적 검색 목록 조회 시 댓글 카운트 서브쿼리로 N+1이 발생하지 않는다")
+    void search_does_not_trigger_n_plus_1() {
+        // pageSize(2) < 전체(5)라 PageableExecutionUtils가 count 쿼리를 생략하지 않는다.
+        PageRequest pageable = PageRequest.of(0, 2, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        Page<Post> posts = postRepository.findAll(pageable);
-        posts.map(PostListResponse::from).getContent();
+        Page<PostListResponse> posts = postRepository.search(new PostSearchCondition(null, null), pageable);
 
-        assertThat(posts.getContent()).hasSize(5);
+        assertThat(posts.getContent()).hasSize(2);
+        assertThat(posts.getTotalElements()).isEqualTo(5);
         assertThat(statistics.getPrepareStatementCount())
-                .as("페이징 count(1) + Post+comments+member fetch(1) = 2개여야 한다 (member가 EntityGraph에서 빠지면 작성자 조회로 N+1 재발)")
+                .as("content(댓글 수 상관 서브쿼리 인라인) 1 + count 1 = 2. 게시글 수 N과 무관하게 고정 — Phase 8 'COUNT 서브쿼리 DTO projection' 실증")
                 .isEqualTo(2);
     }
 }

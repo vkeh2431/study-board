@@ -1,9 +1,13 @@
 package com.example.study_board.domain.post;
 
+import com.example.study_board.domain.comment.Comment;
 import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.member.Role;
+import com.example.study_board.dto.post.PostListResponse;
+import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.global.config.JpaAuditingConfig;
+import com.example.study_board.global.config.QueryDslConfig;
 import com.example.study_board.global.security.CustomUserDetails;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,7 +32,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@Import(JpaAuditingConfig.class)
+@Import({JpaAuditingConfig.class, QueryDslConfig.class})
 @ActiveProfiles("test")
 class PostRepositoryTest {
 
@@ -167,10 +171,10 @@ class PostRepositoryTest {
         postRepository.save(createPost("Spring Security", "내용3"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Post> result = postRepository.searchByKeyword("Spring", pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", null), pageable);
 
         assertThat(result.getContent()).hasSize(2);
-        assertThat(result.getContent()).allMatch(post -> post.getTitle().contains("Spring"));
+        assertThat(result.getContent()).allMatch(post -> post.title().contains("Spring"));
     }
 
     @Test
@@ -180,10 +184,70 @@ class PostRepositoryTest {
         postRepository.save(createPost("제목2", "JPA는 어렵다"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Post> result = postRepository.searchByKeyword("Spring", pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", null), pageable);
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).getContent()).contains("Spring");
+        assertThat(result.getContent().get(0).title()).isEqualTo("제목1");
+    }
+
+    @Test
+    @DisplayName("작성자명으로 검색")
+    void search_by_author() {
+        Member other = memberRepository.save(Member.builder()
+                .email("other@example.com").username("다른작성자").password("encoded").role(Role.USER).build());
+        postRepository.save(createPost("제목1", "내용1")); // 작성자: member("작성자")
+        postRepository.save(Post.builder().title("제목2").content("내용2").member(other).build());
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, "다른"), pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).authorName()).isEqualTo("다른작성자");
+    }
+
+    @Test
+    @DisplayName("키워드 + 작성자 조건을 함께 적용")
+    void search_by_keyword_and_author() {
+        Member other = memberRepository.save(Member.builder()
+                .email("other@example.com").username("다른작성자").password("encoded").role(Role.USER).build());
+        postRepository.save(createPost("Spring 입문", "내용1"));                                  // 작성자, Spring O
+        postRepository.save(Post.builder().title("Spring 심화").content("내용2").member(other).build()); // 다른작성자, Spring O
+        postRepository.save(createPost("JPA", "내용3"));                                          // 작성자, Spring X
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("Spring", "작성자"), pageable);
+
+        assertThat(result.getContent()).hasSize(2); // "작성자" + "다른작성자" 모두 username에 "작성자" 포함
+        assertThat(result.getContent()).allMatch(post -> post.title().contains("Spring"));
+    }
+
+    @Test
+    @DisplayName("조건이 없으면 전체 조회")
+    void search_without_condition_returns_all() {
+        postRepository.save(createPost("제목1", "내용1"));
+        postRepository.save(createPost("제목2", "내용2"));
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, null), pageable);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("검색 결과에 댓글 수가 집계된다 (COUNT 서브쿼리 projection)")
+    void search_aggregates_comment_count() {
+        Post post = postRepository.save(createPost("제목", "내용"));
+        entityManager.persist(Comment.builder().content("댓글1").member(member).post(post).build());
+        entityManager.persist(Comment.builder().content("댓글2").member(member).post(post).build());
+        entityManager.flush();
+        entityManager.clear();
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition(null, null), pageable);
+
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).commentCount()).isEqualTo(2L);
     }
 
     @Test
@@ -192,7 +256,7 @@ class PostRepositoryTest {
         postRepository.save(createPost("제목", "내용"));
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Post> result = postRepository.searchByKeyword("없는키워드", pageable);
+        Page<PostListResponse> result = postRepository.search(new PostSearchCondition("없는키워드", null), pageable);
 
         assertThat(result.getContent()).isEmpty();
         assertThat(result.getTotalElements()).isZero();

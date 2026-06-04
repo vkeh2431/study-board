@@ -1,12 +1,12 @@
 package com.example.study_board.domain.post;
 
-import com.example.study_board.domain.comment.Comment;
 import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.member.Role;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
+import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
@@ -20,16 +20,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
@@ -71,73 +70,37 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("키워드 없이 게시글 목록 조회 시 전체 페이징 조회")
-    void findAll_without_keyword() {
+    @DisplayName("검색 조건과 페이지 정보를 repository.search에 위임하고 결과를 그대로 반환한다")
+    void findAll_delegates_to_repository_search() {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<Post> posts = List.of(createPost("제목1", "내용1", "작성자1"));
-        Page<Post> postPage = new PageImpl<>(posts, pageable, 1);
+        PostSearchCondition condition = new PostSearchCondition("Spring", "작성자");
+        Page<PostListResponse> expected = new PageImpl<>(
+                List.of(new PostListResponse(1L, "Spring 입문", "작성자", 0, 2L, LocalDateTime.now())),
+                pageable, 1);
 
-        given(postRepository.findAll(pageable)).willReturn(postPage);
+        given(postRepository.search(condition, pageable)).willReturn(expected);
 
-        Page<PostListResponse> result = postService.findAll(null, pageable);
-
-        assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).title()).isEqualTo("제목1");
-        verify(postRepository).findAll(pageable);
-    }
-
-    @Test
-    @DisplayName("키워드로 게시글 검색")
-    void findAll_with_keyword() {
-        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        List<Post> posts = List.of(createPost("Spring 입문", "내용", "작성자"));
-        Page<Post> postPage = new PageImpl<>(posts, pageable, 1);
-
-        given(postRepository.searchByKeyword("Spring", pageable)).willReturn(postPage);
-
-        Page<PostListResponse> result = postService.findAll("Spring", pageable);
+        Page<PostListResponse> result = postService.findAll(condition, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).title()).isEqualTo("Spring 입문");
-        verify(postRepository).searchByKeyword("Spring", pageable);
+        assertThat(result.getContent().get(0).commentCount()).isEqualTo(2L);
+        verify(postRepository).search(condition, pageable);
     }
 
     @Test
-    @DisplayName("빈 키워드는 전체 조회로 처리")
-    void findAll_with_blank_keyword() {
+    @DisplayName("조건 없는 목록 조회도 그대로 위임한다")
+    void findAll_without_condition_delegates() {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        Page<Post> postPage = new PageImpl<>(List.of(), pageable, 0);
+        PostSearchCondition condition = new PostSearchCondition(null, null);
+        Page<PostListResponse> empty = new PageImpl<>(List.of(), pageable, 0);
 
-        given(postRepository.findAll(pageable)).willReturn(postPage);
+        given(postRepository.search(condition, pageable)).willReturn(empty);
 
-        Page<PostListResponse> result = postService.findAll("  ", pageable);
+        Page<PostListResponse> result = postService.findAll(condition, pageable);
 
         assertThat(result.getContent()).isEmpty();
-        verify(postRepository).findAll(pageable);
-    }
-
-    @Test
-    @DisplayName("조회된 각 Post가 필드까지 PostListResponse로 변환된다")
-    void findAll_returns_page_of_post_list_response() {
-        Post withActivity = createPost("첫 글", "내용1", "작성자A");
-        withActivity.incrementViewCount();
-        withActivity.addComment(Comment.builder().content("댓글").build());
-        Post plain = createPost("둘째 글", "내용2", "작성자B");
-        Page<Post> postPage = new PageImpl<>(List.of(withActivity, plain));
-
-        given(postRepository.findAll(any(Pageable.class))).willReturn(postPage);
-
-        Page<PostListResponse> result = postService.findAll(null, PageRequest.of(0, 10));
-
-        assertThat(result.getContent())
-                .extracting(
-                        PostListResponse::title,
-                        PostListResponse::authorName,
-                        PostListResponse::viewCount,
-                        PostListResponse::commentCount)
-                .containsExactly(
-                        tuple("첫 글", "작성자A", 1, 1L),
-                        tuple("둘째 글", "작성자B", 0, 0L));
+        verify(postRepository).search(condition, pageable);
     }
 
     @Test

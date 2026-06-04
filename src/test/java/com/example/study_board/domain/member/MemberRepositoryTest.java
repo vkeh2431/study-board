@@ -1,6 +1,7 @@
 package com.example.study_board.domain.member;
 
 import com.example.study_board.global.config.JpaAuditingConfig;
+import com.example.study_board.global.config.QueryDslConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,7 +14,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
-@Import(JpaAuditingConfig.class)
+@Import({JpaAuditingConfig.class, QueryDslConfig.class})
 @ActiveProfiles("test")
 class MemberRepositoryTest {
 

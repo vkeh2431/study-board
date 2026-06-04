@@ -3,6 +3,7 @@ package com.example.study_board.domain.post;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
+import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.domain.member.Role;
 import com.example.study_board.global.config.SecurityConfig;
@@ -30,7 +31,6 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
@@ -69,7 +69,7 @@ class PostControllerTest {
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
-        given(postService.findAll(isNull(), any(Pageable.class))).willReturn(page);
+        given(postService.findAll(any(PostSearchCondition.class), any(Pageable.class))).willReturn(page);
 
         mockMvc.perform(get("/api/posts"))
                 .andExpect(status().isOk())
@@ -88,7 +88,7 @@ class PostControllerTest {
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 1);
 
-        given(postService.findAll(eq("Spring"), any(Pageable.class))).willReturn(page);
+        given(postService.findAll(any(PostSearchCondition.class), any(Pageable.class))).willReturn(page);
 
         mockMvc.perform(get("/api/posts").param("keyword", "Spring"))
                 .andExpect(status().isOk())
@@ -105,7 +105,7 @@ class PostControllerTest {
         );
         Page<PostListResponse> page = new PageImpl<>(content, pageable, 10);
 
-        given(postService.findAll(isNull(), any(Pageable.class))).willReturn(page);
+        given(postService.findAll(any(PostSearchCondition.class), any(Pageable.class))).willReturn(page);
 
         mockMvc.perform(get("/api/posts")
                         .param("page", "1")

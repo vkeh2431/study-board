@@ -6,6 +6,7 @@ import com.example.study_board.domain.member.Role;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
+import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.global.exception.BusinessException;
 import com.example.study_board.global.exception.ErrorCode;
@@ -49,12 +50,10 @@ public class PostService {
         return PostResponse.from(post);
     }
 
-    public Page<PostListResponse> findAll(String keyword, Pageable pageable) {
-        log.debug("게시글 목록 조회: keyword={}, page={}", keyword, pageable.getPageNumber());
-        Page<Post> posts = (keyword == null || keyword.isBlank())
-                ? postRepository.findAll(pageable)
-                : postRepository.searchByKeyword(keyword, pageable);
-        return posts.map(PostListResponse::from);
+    public Page<PostListResponse> findAll(PostSearchCondition condition, Pageable pageable) {
+        log.debug("게시글 목록 조회: keyword={}, author={}, page={}",
+                condition.keyword(), condition.author(), pageable.getPageNumber());
+        return postRepository.search(condition, pageable);
     }
 
     @Transactional

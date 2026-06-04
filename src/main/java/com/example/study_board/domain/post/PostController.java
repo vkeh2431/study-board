@@ -3,6 +3,7 @@ package com.example.study_board.domain.post;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostListResponse;
 import com.example.study_board.dto.post.PostResponse;
+import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.global.security.CustomUserDetails;
 import jakarta.validation.Valid;
@@ -40,8 +41,10 @@ public class PostController {
     @GetMapping
     public ResponseEntity<Page<PostListResponse>> findAll(
             @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String author,
             @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
-        Page<PostListResponse> responses = postService.findAll(keyword, pageable);
+        PostSearchCondition condition = new PostSearchCondition(keyword, author);
+        Page<PostListResponse> responses = postService.findAll(condition, pageable);
         return ResponseEntity.ok(responses);
     }
 
