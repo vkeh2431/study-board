@@ -172,12 +172,12 @@ Phase 0~9로 학습 기초가 정리된 뒤, "프로덕션 같은" 프로젝트�
 
 ### Phase 10: 공통 에러코드 enum + 예외 체계 정리
 Security를 얹기 전 응답/에러 계약을 안정화. 작지만 모든 후속 Phase가 이 위에 쌓인다.
-- [ ] `ErrorCode` enum 도입 (code 문자열, `HttpStatus`, defaultMessage 보유) — 흩어진 `"RESOURCE_NOT_FOUND"`, `"VALIDATION_ERROR"` 문자열 통합
-- [ ] `BusinessException` 베이스 예외(`ErrorCode` 보유) 도입, `ResourceNotFoundException`을 이 체계로 편입
-- [ ] `GlobalExceptionHandler`를 `ErrorCode` 기반으로 리팩터
-- [ ] **TDD**: Controller 테스트의 에러 케이스 기대 JSON을 새 enum 값 기준으로 먼저 수정(Red) → 핸들러/예외 리팩터(Green) + `ErrorCode` 매핑 단위 테스트
+- [x] `ErrorCode` enum 도입 (code 문자열, `HttpStatus`, defaultMessage 보유) — 흩어진 `"RESOURCE_NOT_FOUND"`, `"VALIDATION_ERROR"` 문자열 통합
+- [x] `BusinessException` 베이스 예외(`ErrorCode` 보유) 도입, `ResourceNotFoundException`을 이 체계로 편입
+- [x] `GlobalExceptionHandler`를 `ErrorCode` 기반으로 리팩터 (단일 `@ExceptionHandler(BusinessException)` 다형 처리로 통합, `ErrorResponse.of(ErrorCode)` 팩터리 추가)
+- [x] **TDD**: Controller/통합 테스트 에러 케이스 ~12곳을 `ErrorCode.X.getCode()` 참조로 먼저 수정(Red) → 핸들러/예외 리팩터(Green) + `ErrorCodeTest`/`BusinessExceptionTest` 단위 테스트
 - **배우는 것**: 에러 응답 일관성, enum + `@RestControllerAdvice` 조합, 예외 계층 설계
-- **검증**: 없는 ID 조회 / 검증 실패 시 통일된 `code` 필드 JSON 응답 + 전체 테스트 GREEN
+- **검증**: ✅ 없는 ID 조회 / 검증 실패 시 통일된 `code` 필드 JSON 응답 + 전체 테스트 GREEN (69개)
 - ⚠️ 성공 응답 `ApiResponse<T>` 전체 래핑은 `Page<T>` 직렬화 충돌·면접 호불호로 **보류**(에러 포맷 통일만)
 
 ### Phase 11: Spring Security + JWT + Member 도메인 [최우선 핵심]

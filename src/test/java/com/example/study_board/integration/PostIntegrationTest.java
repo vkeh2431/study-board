@@ -8,6 +8,7 @@ import com.example.study_board.dto.comment.CommentUpdateRequest;
 import com.example.study_board.dto.post.PostCreateRequest;
 import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostUpdateRequest;
+import com.example.study_board.global.exception.ErrorCode;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -118,7 +119,7 @@ class PostIntegrationTest {
     void find_post_not_found_returns_404() throws Exception {
         mockMvc.perform(get("/api/posts/999999"))
                 .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value("RESOURCE_NOT_FOUND"));
+                .andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
     }
 
     @Test
