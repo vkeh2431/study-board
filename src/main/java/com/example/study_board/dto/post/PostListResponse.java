@@ -1,5 +1,7 @@
 package com.example.study_board.dto.post;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.time.LocalDateTime;
 
 /**
@@ -10,13 +12,28 @@ import java.time.LocalDateTime;
  * 태그는 컬렉션이라 목록에는 넣지 않고 상세({@code PostResponse})에서만 노출한다.
  */
 public record PostListResponse(
+        @Schema(description = "게시글 ID", example = "1")
         Long id,
+
+        @Schema(description = "제목", example = "Spring Boot 게시판 만들기")
         String title,
+
+        @Schema(description = "작성자 사용자명", example = "honggildong")
         String authorName,
+
+        @Schema(description = "카테고리명(없으면 null)", example = "Spring")
         String categoryName,
+
+        @Schema(description = "조회수", example = "42")
         int viewCount,
+
+        @Schema(description = "댓글 수", example = "3")
         long commentCount,
+
+        @Schema(description = "좋아요 수", example = "7")
         long likeCount,
+
+        @Schema(description = "작성 일시")
         LocalDateTime createdAt
 ) {
 }

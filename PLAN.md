@@ -242,11 +242,16 @@ H2 인메모리 졸업(사용자 결정). Phase 9(프로파일/로깅/OSIV)를 �
 
 ### Phase 15: Swagger/OpenAPI 문서화
 API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지 반영.
-- [ ] springdoc-openapi 도입, JWT `SecurityScheme` 등록(Authorize 버튼), `@Operation`/`@Schema` 어노테이션. `prod`에선 Swagger UI 비활성화
-- [ ] **TDD**: 문서화는 적합도 낮음 — `/v3/api-docs` 200 + 보안 스킴 존재 smoke 통합 테스트로 충분
+- [x] springdoc-openapi 도입, JWT `SecurityScheme`(`bearerAuth`) 등록(Authorize 버튼) + 전역 `SecurityRequirement`. `OpenApiConfig`에 `OpenAPI` 빈. `SecurityConfig`에 `/v3/api-docs/**`·`/swagger-ui/**`·`/swagger-ui.html` permitAll
+- [x] 컨트롤러 4개(`@Tag`+`@Operation`) + `dto/**` 요청·응답 record 12개(`@Schema` description/example). `PostSearchCondition`은 개별 `@RequestParam`으로 수동 조립돼 바인딩 안 되므로 제외
+- [x] `prod`에선 Swagger 비활성화(`springdoc.api-docs.enabled=false` + `swagger-ui.enabled=false`), dev/test는 기본값 유지
+- [x] **TDD**: `OpenApiDocsTest` smoke — `/v3/api-docs` 200 + `bearerAuth`(type=http, scheme=bearer) 존재(Red 401 → Green 200)
+- [x] **부수 발견/수정**: prod에서 비활성화된 `/v3/api-docs`(permitAll)가 디스패처까지 가서 `NoResourceFoundException` → 기존 catch-all `@ExceptionHandler(Exception)`가 **500**으로 처리. `GlobalExceptionHandler`에 `@ExceptionHandler(NoResourceFoundException)` 추가해 **404(RESOURCE_NOT_FOUND)**로 정리(`NotFoundHandlingTest` Red→Green). 인증 필요한 미매핑 경로는 시큐리티가 먼저 401로 끊음
 - **배우는 것**: API 문서 자동화, OpenAPI 스펙, 인증 헤더 문서화(포트폴리오 가시성 ↑)
-- **의존성**: `org.springdoc:springdoc-openapi-starter-webmvc-ui`
-- **검증**: `/swagger-ui.html`에서 Authorize 후 인증 API 호출 가능
+- **의존성**: `org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3`
+- **검증**: ✅ 전체 테스트 GREEN(151개, +2) + dev 부팅: `/v3/api-docs` 200(bearerAuth·4개 Tag·`@Operation`·`@Schema` example 노출)·`/swagger-ui.html` 302 + 회원가입→로그인→Bearer 토큰으로 게시글 작성 201·미인증 401 curl 확인 + prod 부팅(8081, 같은 MySQL): `/v3/api-docs`·`/swagger-ui.html` 404(RESOURCE_NOT_FOUND), 공개 API 200
+  - ⚠️ **Boot 4 트랩(QueryDSL 7.2·jjwt 0.12·Security 7과 동일 맥락)**: springdoc **2.x는 Boot 3 전용**(Spring 6/Jackson 2)이라 깨진다. Boot 4(Spring 7 + Jackson 3=`tools.jackson`)는 **3.0.x**를 써야 하며, 3.0.3은 `/v3/api-docs` 직렬화를 Jackson 3로 자체 처리(`NoSuchMethodError`/직렬화 예외 없음). BOM이 버전을 관리하지 않으므로 명시 버전 고정 필수
+  - ⚠️ Bean Validation(`@NotBlank`/`@Size`)은 그대로 두고 `@Schema`만 추가 → 제약이 문서 스키마에 자동 반영(예: `maxLength`)
 
 ### Phase 16: CI(GitHub Actions) + Testcontainers + 조회수 동시성/Redis 캐싱
 자동화와 실 DB 기반 테스트로 마무리. 동시성/캐싱을 인프라 성격으로 묶음.

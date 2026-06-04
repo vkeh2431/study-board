@@ -39,6 +39,10 @@ dependencies {
     annotationProcessor 'io.github.openfeign.querydsl:querydsl-apt:7.2:jakarta' // :jakarta classifier 필수
     annotationProcessor 'jakarta.persistence:jakarta.persistence-api'           // 버전은 Boot BOM이 관리
     annotationProcessor 'jakarta.annotation:jakarta.annotation-api'
+    // Phase 15: Swagger/OpenAPI 문서화. springdoc 2.x는 Boot 3 전용(Spring 6/Jackson 2)이라 깨진다.
+    // Boot 4(Spring 7 + Jackson 3 = tools.jackson)를 지원하는 3.0.x 계열을 명시 버전으로 고정한다
+    // (Spring 의존성 관리 BOM이 springdoc 버전을 관리하지 않음).
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.3'
     compileOnly 'org.projectlombok:lombok'
     developmentOnly 'org.springframework.boot:spring-boot-devtools'
     annotationProcessor 'org.projectlombok:lombok'

@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @Slf4j
 @RestControllerAdvice
@@ -40,6 +41,18 @@ public class GlobalExceptionHandler {
         ErrorCode errorCode = ErrorCode.BAD_REQUEST;
         return ResponseEntity.status(errorCode.getStatus())
                 .body(ErrorResponse.of(errorCode, e.getMessage()));
+    }
+
+    /**
+     * 매핑된 핸들러가 없는 경로(permitAll이라 시큐리티는 통과했지만 라우팅 실패). catch-all로 가면 500이 되므로 404로 처리한다.
+     * 예: prod에서 비활성화된 {@code /v3/api-docs}, 잘못된 하위 경로 등. 인증이 필요한 미매핑 경로는 시큐리티 단계에서 먼저 401로 끊긴다.
+     */
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ErrorResponse> handleNoResourceFoundException(NoResourceFoundException e) {
+        log.warn("매핑되지 않은 경로 요청: {}", e.getResourcePath());
+        ErrorCode errorCode = ErrorCode.RESOURCE_NOT_FOUND;
+        return ResponseEntity.status(errorCode.getStatus())
+                .body(ErrorResponse.of(errorCode));
     }
 
     @ExceptionHandler(Exception.class)

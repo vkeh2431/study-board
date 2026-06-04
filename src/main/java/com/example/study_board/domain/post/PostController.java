@@ -6,6 +6,8 @@ import com.example.study_board.dto.post.PostResponse;
 import com.example.study_board.dto.post.PostSearchCondition;
 import com.example.study_board.dto.post.PostUpdateRequest;
 import com.example.study_board.global.security.CustomUserDetails;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -17,6 +19,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+@Tag(name = "게시글", description = "게시글 CRUD 및 검색. 조회는 공개, 쓰기는 인증 필요")
 @RestController
 @RequestMapping("/api/posts")
 @RequiredArgsConstructor
@@ -24,6 +27,7 @@ public class PostController {
 
     private final PostService postService;
 
+    @Operation(summary = "게시글 작성", description = "인증된 사용자가 게시글을 작성한다. 작성자는 토큰에서 주입된다.")
     @PostMapping
     public ResponseEntity<PostResponse> create(
             @AuthenticationPrincipal CustomUserDetails principal,
@@ -32,6 +36,7 @@ public class PostController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Operation(summary = "게시글 단건 조회", description = "게시글 상세를 조회한다. 인증 시 liked 플래그가 채워진다(미인증이면 false).")
     @GetMapping("/{id}")
     public ResponseEntity<PostResponse> findById(
             @PathVariable Long id,
@@ -42,6 +47,7 @@ public class PostController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "게시글 목록/검색", description = "키워드/작성자/카테고리/태그로 동적 검색하고 페이징한다.")
     @GetMapping
     public ResponseEntity<Page<PostListResponse>> findAll(
             @RequestParam(required = false) String keyword,
@@ -54,6 +60,7 @@ public class PostController {
         return ResponseEntity.ok(responses);
     }
 
+    @Operation(summary = "게시글 수정", description = "작성자 본인 또는 ADMIN만 수정 가능. 타인은 403.")
     @PutMapping("/{id}")
     public ResponseEntity<PostResponse> update(
             @AuthenticationPrincipal CustomUserDetails principal,
@@ -63,6 +70,7 @@ public class PostController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "게시글 삭제", description = "작성자 본인 또는 ADMIN만 삭제 가능(soft delete). 타인은 403.")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(
             @AuthenticationPrincipal CustomUserDetails principal,

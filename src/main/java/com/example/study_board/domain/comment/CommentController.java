@@ -4,6 +4,8 @@ import com.example.study_board.dto.comment.CommentCreateRequest;
 import com.example.study_board.dto.comment.CommentResponse;
 import com.example.study_board.dto.comment.CommentUpdateRequest;
 import com.example.study_board.global.security.CustomUserDetails;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -13,12 +15,14 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
+@Tag(name = "댓글", description = "게시글 댓글 CRUD. 목록은 공개, 쓰기는 인증 필요")
 @RestController
 @RequiredArgsConstructor
 public class CommentController {
 
     private final CommentService commentService;
 
+    @Operation(summary = "댓글 작성", description = "게시글에 댓글을 작성한다. 작성자는 토큰에서 주입된다.")
     @PostMapping("/api/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> create(
             @PathVariable Long postId,
@@ -28,12 +32,14 @@ public class CommentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Operation(summary = "댓글 목록 조회", description = "게시글의 댓글을 작성일 내림차순으로 조회한다.")
     @GetMapping("/api/posts/{postId}/comments")
     public ResponseEntity<List<CommentResponse>> findByPostId(@PathVariable Long postId) {
         List<CommentResponse> responses = commentService.findByPostId(postId);
         return ResponseEntity.ok(responses);
     }
 
+    @Operation(summary = "댓글 수정", description = "작성자 본인 또는 ADMIN만 수정 가능. 타인은 403.")
     @PutMapping("/api/comments/{id}")
     public ResponseEntity<CommentResponse> update(
             @AuthenticationPrincipal CustomUserDetails principal,
@@ -43,6 +49,7 @@ public class CommentController {
         return ResponseEntity.ok(response);
     }
 
+    @Operation(summary = "댓글 삭제", description = "작성자 본인 또는 ADMIN만 삭제 가능. 타인은 403.")
     @DeleteMapping("/api/comments/{id}")
     public ResponseEntity<Void> delete(
             @AuthenticationPrincipal CustomUserDetails principal,
