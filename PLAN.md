@@ -254,15 +254,23 @@ API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지
   - ⚠️ Bean Validation(`@NotBlank`/`@Size`)은 그대로 두고 `@Schema`만 추가 → 제약이 문서 스키마에 자동 반영(예: `maxLength`)
 
 ### Phase 16: CI(GitHub Actions) + Testcontainers + 조회수 동시성/Redis 캐싱
-자동화와 실 DB 기반 테스트로 마무리. 동시성/캐싱을 인프라 성격으로 묶음.
-- [ ] Testcontainers로 통합 테스트를 실제 MySQL에서 실행(H2 방언 차이 제거), `PostIntegrationTest`를 `@Testcontainers`로 전환
-- [ ] GitHub Actions: PR마다 `./gradlew test` + 빌드
-- [ ] **조회수 동시성**: 현재 `incrementViewCount()`는 dirty checking이라 동시 요청에 lost update → 비관적 락 / `@Modifying` 원자적 UPDATE / Redis INCR 중 택1
-- [ ] **Redis 캐싱**: 인기글/단건 조회 `@Cacheable` + TTL
-- [ ] **TDD**: 조회수 — 멀티스레드 N회 동시 조회 후 viewCount==N 통합 테스트(Red, 현재 실패) → 원자적 UPDATE/락(Green). 캐시는 "2번째 조회 시 쿼리 미발생"을 Hibernate Statistics로 검증(Phase 8 기법 재활용)
-- **배우는 것**: CI/CD 기본, Testcontainers가 H2보다 신뢰성 높은 이유, lost update와 동시성 제어(낙관/비관 락), 캐시 무효화 전략
-- **의존성**: `org.testcontainers:mysql`/`junit-jupiter`, `spring-boot-starter-data-redis`
-- **검증**: 동시성 테스트 GREEN, GitHub Actions PR 체크 통과
+자동화와 실 DB 기반 테스트로 마무리. 동시성/캐싱을 인프라 성격으로 묶음. Phase 14처럼 4개 서브페이즈로 진행.
+- [x] **16-1** Testcontainers로 `PostIntegrationTest`를 실 MySQL 8.4에서 실행(`AbstractMySqlContainerTest` 싱글톤 컨테이너 + `testcontainers` 프로필로 Flyway on + validate). Phase 13/14가 미룬 "V1~V3 마이그레이션·MySQL validate 자동 검증" 달성 + DataSource가 MySQL임을 단언
+- [x] **16-2** GitHub Actions `.github/workflows/ci.yml`: PR/main push에서 JDK17 + gradle 캐시 + `./gradlew test build`(ubuntu-latest Docker로 Testcontainers 동작)
+- [x] **16-3** **조회수 동시성**: `@Modifying` 원자적 UPDATE 택1(`view_count=view_count+1 WHERE id=? AND deleted_at IS NULL`, `clearAutomatically`). `findById`는 UPDATE 먼저→0행이면 404→fresh read. `Post.incrementViewCount()` 제거
+- [x] **16-4** **Redis 캐싱**: 인기글 목록(`findPopular`) `@Cacheable` + TTL 5분 + 쓰기 시 `@CacheEvict(allEntries, beforeInvocation)`. 단건은 viewCount 증가·사용자별 liked로 캐싱 제외. `GET /api/posts/popular`
+- [x] **TDD**: 조회수 — 50 스레드 동시 조회 후 viewCount==50(Red: lost update로 6 → Green: 50). 캐시는 "2번째 조회 시 쿼리 미발생"을 Hibernate Statistics로 검증(Phase 8 기법 재활용)
+- **배우는 것**: CI/CD 기본, Testcontainers가 H2보다 신뢰성 높은 이유, lost update와 동시성 제어(원자적 UPDATE), 캐시 무효화 전략(allEntries·beforeInvocation 트레이드오프)
+- **의존성**: `org.testcontainers:testcontainers-mysql`/`testcontainers-junit-jupiter` + `spring-boot-testcontainers`, `spring-boot-starter-cache` + `spring-boot-starter-data-redis`
+- **검증**: ✅ 전체 테스트 GREEN(155개, +4) + Testcontainers 실 MySQL에서 Flyway migrate+validate 통과 + 동시성 50==50 + Redis 캐시 히트/무효화 검증(Statistics)
+
+#### 학습 노트: Phase 16에서 밟은 함정
+- ⚠️ **Boot 4 BOM = Testcontainers 2.x**: 아티팩트 ID 변경(`junit-jupiter`→`testcontainers-junit-jupiter`, `mysql`→`testcontainers-mysql`), `MySQLContainer`가 `org.testcontainers.mysql`로 이동(구 패키지 deprecated) + self-type 제네릭 제거. BOM 관리이므로 버전 고정 금지(QueryDSL/springdoc/jjwt와 반대).
+- ⚠️ **`@SQLRestriction`은 벌크 JPQL UPDATE에 미적용** → `AND p.deletedAt IS NULL` 직접 명시(soft-deleted 글 증가 방지). `clearAutomatically=true`로 증가 직후 fresh read.
+- ⚠️ **Boot 4 캐시 자동설정 모듈 분리**: `starter-data-redis`만으론 캐시 자동설정이 없어 `@Cacheable` 미동작 → `starter-cache` 추가 필요. `RedisCacheManagerBuilderCustomizer`가 `org.springframework.boot.cache.autoconfigure`로 이동.
+- ⚠️ **`@CacheEvict` beforeInvocation**: 기본(afterInvocation)은 트랜잭션 인지 캐시가 커밋 이후로 무효화를 미뤄 동기적 검증이 비결정적 → `beforeInvocation=true`로 즉시 무효화(짧은 staleness 창은 5분 TTL로 수렴).
+- ⚠️ **test 기본 `spring.cache.type=simple`**: `starter-data-redis`가 있으면 캐시 타입 redis가 기본이라 `@CacheEvict` 쓰기 경로를 포함한 통합 테스트가 Redis를 요구 → 기본 test는 simple, 캐시 검증 테스트만 `redis`로 override(Testcontainers Redis).
+- ⚠️ **동시성/캐시 테스트는 비트랜잭션**: 별도 스레드/커밋이라 롤백 불가 → `JdbcTemplate` 네이티브 DELETE로 정리(soft delete 우회). 캐시 테스트는 메서드 간 Redis 상태 공유 flaky를 단일 생애주기 테스트 + FLUSHDB로 차단.
 
 #### 우선순위 요약
 
