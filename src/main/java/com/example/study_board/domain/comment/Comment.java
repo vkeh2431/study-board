@@ -8,10 +8,17 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+// soft delete (Phase 13): Post 삭제 시 cascade=REMOVE가 각 댓글의 @SQLDelete를 호출해 함께 soft delete된다.
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE comment SET deleted_at = NOW(6) WHERE id = ?")
 public class Comment extends BaseTimeEntity {
 
     @Id
@@ -28,6 +35,8 @@ public class Comment extends BaseTimeEntity {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id", nullable = false)
     private Post post;
+
+    private LocalDateTime deletedAt;
 
     @Builder
     public Comment(String content, Member member, Post post) {

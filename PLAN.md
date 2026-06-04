@@ -207,15 +207,17 @@ Phase 11 직후 이어지는 소규모 Phase. 인증과 인가의 차이를 코�
 
 ### Phase 13: 실 DB(MySQL) + Flyway + docker-compose + 프로파일·감사·soft delete
 H2 인메모리 졸업(사용자 결정). Phase 9(프로파일/로깅/OSIV)를 여기에 합쳐 마무리.
-- [ ] `docker-compose.yml`로 MySQL 기동 (`mysql:8.4`, 포트 3306, `CHARSET=utf8mb4`/`utf8mb4_unicode_ci`, `MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD` env)
-- [ ] Flyway `V1__init.sql`로 누적 스키마 명시(ddl-auto 의존 탈피), `prod`는 `ddl-auto=validate`. PK는 `BIGINT AUTO_INCREMENT`(엔티티가 이미 `GenerationType.IDENTITY`), 타임스탬프는 `DATETIME(6)`, 테이블 옵션 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-- [ ] 프로파일: `dev`(로컬 MySQL/H2), `prod`(MySQL + validate), `test`(Testcontainers/H2). Phase 9 항목(OSIV=false, `@Slf4j` 로깅, `GlobalExceptionHandler`의 `log.error`) 완료
-- [ ] **감사**: `BaseTimeEntity` 확장(`@CreatedBy`/`@LastModifiedBy`), `AuditorAware`가 `SecurityContext`에서 현재 사용자 제공(Phase 11 의존)
-- [ ] **soft delete**: `@SQLRestriction` + `deletedAt` 컬럼. 기존 cascade REMOVE 정책 충돌 재설계 주의
-- [ ] **TDD**: soft delete가 핵심 — `@DataJpaTest` "삭제 후 findAll 미포함 / DB엔 잔존"(Red) → 구현(Green). Flyway는 컨텍스트 로딩 통합 테스트로 검증
+- [x] `docker-compose.yml`로 MySQL 기동 (`mysql:8.4`, 포트 3306, `CHARSET=utf8mb4`/`utf8mb4_unicode_ci`, `MYSQL_DATABASE`/`MYSQL_USER`/`MYSQL_PASSWORD` env, healthcheck)
+- [x] Flyway `V1__init.sql`로 누적 스키마 명시(ddl-auto 의존 탈피), `dev`/`prod` 모두 `ddl-auto=validate`. PK는 `BIGINT AUTO_INCREMENT`(엔티티가 이미 `GenerationType.IDENTITY`), 타임스탬프는 `DATETIME(6)`, 테이블 옵션 `ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+- [x] 프로파일(사용자 결정 = dev도 MySQL): `dev`(로컬 MySQL + Flyway + validate), `prod`(MySQL env 주입 + validate), `test`(H2 + **Flyway off** + create-drop, Testcontainers는 Phase 16). 기존 repository `@DataJpaTest`에 `@ActiveProfiles("test")` 보강(이전엔 `spring.profiles.active=dev`를 따라가 dev=MySQL 전환 시 깨짐). Phase 9 항목(OSIV=false, `@Slf4j` 로깅, `GlobalExceptionHandler`의 `log.error`) 완료
+- [x] **감사**: `BaseTimeEntity` 확장(`@CreatedBy`/`@LastModifiedBy`, **nullable**), `AuditorAwareImpl`이 `SecurityContext`의 `CustomUserDetails`에서 memberId 제공(Phase 11 의존). 미인증/익명/`@DataJpaTest`(컨텍스트 없음)/회원가입은 빈 Optional → NULL
+- [x] **soft delete**: Hibernate 위임 방식 — Post/Comment에 `@SQLRestriction("deleted_at IS NULL")` + `@SQLDelete(...UPDATE...)`. 기존 `cascade=REMOVE` 유지 → `delete(post)`가 댓글 `@SQLDelete`를 cascade 호출해 함께 soft delete
+- [x] **TDD**: soft delete가 핵심 — `@DataJpaTest` "삭제 후 조회 제외 / 네이티브 쿼리로 행 잔존+`deleted_at` 확인"(Red) → 구현(Green). `AuditorAwareImplTest` 단위 + `createdBy` 주입 테스트. Flyway/validate는 실 MySQL 수동 부팅으로 검증
 - **배우는 것**: `ddl-auto=validate`가 정석인 이유, 마이그레이션 툴 필요성, OSIV 트레이드오프, soft delete 장단점(유니크 제약/조회 필터 누락 위험), `AuditorAware`. MySQL 실무 포인트 — `utf8mb4`(이모지/한글 보조문자 저장)와 collation, `DATETIME(6)` vs `TIMESTAMP`, MySQL은 시퀀스 미지원이라 `IDENTITY`(AUTO_INCREMENT)가 정답
-- **의존성**: `flyway-core`, `flyway-mysql`, `com.mysql:mysql-connector-j`
-- **검증**: docker-compose 기동 후 prod 프로필 부팅(validate 통과), soft delete 동작 확인
+- **의존성**: `org.springframework.boot:spring-boot-starter-flyway`(Boot 4는 자동설정이 모듈 분리 — `flyway-core`만으론 부팅 시 Flyway 미실행), `org.flywaydb:flyway-mysql`, `com.mysql:mysql-connector-j`(버전은 BOM 관리). H2는 `testRuntimeOnly`로 강등, `spring-boot-h2console` 제거
+- **검증**: ✅ 전체 테스트 GREEN(119개, H2 + Flyway off) + docker-compose 기동 → dev 부팅(Flyway V1 migrate + validate 통과) + prod 부팅(env 주입, validate 통과) + soft delete e2e(삭제 204 → GET 404, MySQL에 행 잔존 + `deleted_at`/`created_by` 설정, 댓글 cascade soft delete, 회원 `created_by` NULL)
+  - ⚠️ 커버리지 갭(의도): `test`가 H2 + Flyway off라 `V1__init.sql`·MySQL `validate`를 자동 검증하는 테스트는 없음 → 실 MySQL 부팅으로만 검증. 자동화는 **Phase 16(Testcontainers)** 로 연기
+  - ⚠️ Boot 4 노트: `flyway-core`만 추가하면 Flyway 라이브러리는 클래스패스에 있어도 Spring Boot 자동설정(`spring-boot-flyway` 모듈)이 없어 **부팅 시 마이그레이션이 실행되지 않는다**(validate가 빈 스키마에 실패). `spring-boot-starter-flyway`가 자동설정+`flyway-core`를 함께 제공
 
 ### Phase 14: QueryDSL 동적 검색 + 도메인 확장(카테고리/태그/좋아요)
 검색을 동적 쿼리로 끌어올리고, 그 가치를 보여줄 검색 조건을 위해 도메인을 확장.

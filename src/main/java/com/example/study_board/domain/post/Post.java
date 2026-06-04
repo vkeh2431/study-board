@@ -8,13 +8,20 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.SQLDelete;
+import org.hibernate.annotations.SQLRestriction;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+// soft delete (Phase 13): delete()는 물리 삭제 대신 deleted_at UPDATE로 치환되고(@SQLDelete),
+// 모든 조회에 deleted_at IS NULL 조건이 자동 부착된다(@SQLRestriction).
+@SQLRestriction("deleted_at IS NULL")
+@SQLDelete(sql = "UPDATE post SET deleted_at = NOW(6) WHERE id = ?")
 public class Post extends BaseTimeEntity {
 
     @Id
@@ -36,6 +43,8 @@ public class Post extends BaseTimeEntity {
 
     @OneToMany(mappedBy = "post", cascade = CascadeType.REMOVE)
     private List<Comment> comments = new ArrayList<>();
+
+    private LocalDateTime deletedAt;
 
     @Builder
     public Post(String title, String content, Member member) {

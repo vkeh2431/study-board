@@ -1,6 +1,6 @@
 # study_board
 
-Spring Boot 게시판 학습 프로젝트. REST API 전용, H2 인메모리 DB.
+Spring Boot 게시판 학습 프로젝트. REST API 전용. dev/prod는 MySQL(docker-compose) + Flyway, test는 H2 인메모리(Flyway off, create-drop) — Phase 13에서 전환.
 
 ## TDD 규칙 (반드시 준수)
 

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.test.context.ActiveProfiles;
 
 import jakarta.persistence.EntityManager;
 import java.util.List;
@@ -21,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @Import(JpaAuditingConfig.class)
+@ActiveProfiles("test")
 class CommentRepositoryTest {
 
     @Autowired
@@ -105,19 +107,28 @@ class CommentRepositoryTest {
     }
 
     @Test
-    @DisplayName("댓글 삭제")
+    @DisplayName("댓글 삭제 - soft delete: 조회에서는 제외되지만 행은 보존된다")
     void delete_comment() {
         Post post = postRepository.save(createPost());
-        Comment saved = commentRepository.save(createComment(post, "댓글 내용"));
+        Comment saved = commentRepository.saveAndFlush(createComment(post, "댓글 내용"));
+        Long id = saved.getId();
 
         commentRepository.delete(saved);
+        entityManager.flush();
+        entityManager.clear();
 
-        Optional<Comment> found = commentRepository.findById(saved.getId());
-        assertThat(found).isEmpty();
+        // @SQLRestriction으로 조회에서 제외
+        assertThat(commentRepository.findById(id)).isEmpty();
+        // 행은 물리적으로 보존
+        Long count = ((Number) entityManager
+                .createNativeQuery("SELECT COUNT(*) FROM comment WHERE id = :id")
+                .setParameter("id", id)
+                .getSingleResult()).longValue();
+        assertThat(count).isEqualTo(1L);
     }
 
     @Test
-    @DisplayName("게시글 삭제 시 댓글도 함께 삭제된다")
+    @DisplayName("게시글 삭제 시 댓글도 cascade로 함께 soft delete (조회 제외, 행은 deleted_at 설정 후 보존)")
     void delete_post_cascades_to_comments() {
         Post post = postRepository.save(createPost());
         commentRepository.save(createComment(post, "댓글1"));
@@ -127,8 +138,15 @@ class CommentRepositoryTest {
 
         postRepository.deleteById(post.getId());
         entityManager.flush();
+        entityManager.clear();
 
-        List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(post.getId());
-        assertThat(comments).isEmpty();
+        // 조회에서는 제외
+        assertThat(commentRepository.findByPostIdOrderByCreatedAtDesc(post.getId())).isEmpty();
+        // 댓글 행은 보존되고 deleted_at이 설정됨 (cascade soft delete)
+        Long softDeleted = ((Number) entityManager
+                .createNativeQuery("SELECT COUNT(*) FROM comment WHERE post_id = :postId AND deleted_at IS NOT NULL")
+                .setParameter("postId", post.getId())
+                .getSingleResult()).longValue();
+        assertThat(softDeleted).isEqualTo(2L);
     }
 }

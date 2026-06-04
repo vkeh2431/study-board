@@ -4,17 +4,24 @@ import com.example.study_board.domain.member.Member;
 import com.example.study_board.domain.member.MemberRepository;
 import com.example.study_board.domain.member.Role;
 import com.example.study_board.global.config.JpaAuditingConfig;
+import com.example.study_board.global.security.CustomUserDetails;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.test.context.ActiveProfiles;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 
+import jakarta.persistence.EntityManager;
 import java.util.List;
 import java.util.Optional;
 
@@ -22,6 +29,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @Import(JpaAuditingConfig.class)
+@ActiveProfiles("test")
 class PostRepositoryTest {
 
     @Autowired
@@ -29,6 +37,9 @@ class PostRepositoryTest {
 
     @Autowired
     private MemberRepository memberRepository;
+
+    @Autowired
+    private EntityManager entityManager;
 
     private Member member;
 
@@ -40,6 +51,20 @@ class PostRepositoryTest {
                 .password("encoded")
                 .role(Role.USER)
                 .build());
+    }
+
+    @AfterEach
+    void clearSecurityContext() {
+        SecurityContextHolder.clearContext();
+    }
+
+    private void authenticateAs(Long memberId) {
+        CustomUserDetails principal =
+                new CustomUserDetails(memberId, "auditor@example.com", "감사자", null, Role.USER);
+        SecurityContext context = SecurityContextHolder.createEmptyContext();
+        context.setAuthentication(
+                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+        SecurityContextHolder.setContext(context);
     }
 
     private Post createPost(String title, String content) {
@@ -63,6 +88,25 @@ class PostRepositoryTest {
         assertThat(saved.getMember().getUsername()).isEqualTo("작성자");
         assertThat(saved.getViewCount()).isZero();
         assertThat(saved.getCreatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("인증 컨텍스트가 없으면 createdBy는 NULL")
+    void save_post_without_authentication_leaves_createdBy_null() {
+        Post saved = postRepository.saveAndFlush(createPost("제목", "내용"));
+
+        assertThat(saved.getCreatedBy()).isNull();
+    }
+
+    @Test
+    @DisplayName("인증된 사용자가 작성하면 createdBy에 memberId가 주입된다")
+    void save_post_populates_createdBy_from_authentication() {
+        authenticateAs(99L);
+
+        Post saved = postRepository.saveAndFlush(createPost("제목", "내용"));
+
+        assertThat(saved.getCreatedBy()).isEqualTo(99L);
+        assertThat(saved.getLastModifiedBy()).isEqualTo(99L);
     }
 
     @Test
@@ -90,14 +134,29 @@ class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("게시글 삭제")
+    @DisplayName("게시글 삭제 - soft delete: 조회에서는 제외되지만 행은 보존되고 deleted_at이 설정된다")
     void delete_post() {
-        Post saved = postRepository.save(createPost("제목", "내용"));
+        Post saved = postRepository.saveAndFlush(createPost("제목", "내용"));
+        Long id = saved.getId();
 
         postRepository.delete(saved);
+        entityManager.flush();
+        entityManager.clear();
 
-        Optional<Post> found = postRepository.findById(saved.getId());
-        assertThat(found).isEmpty();
+        // @SQLRestriction으로 조회에서 제외
+        assertThat(postRepository.findById(id)).isEmpty();
+        // 행은 물리적으로 보존 (네이티브 쿼리로 @SQLRestriction 우회)
+        Long count = ((Number) entityManager
+                .createNativeQuery("SELECT COUNT(*) FROM post WHERE id = :id")
+                .setParameter("id", id)
+                .getSingleResult()).longValue();
+        assertThat(count).isEqualTo(1L);
+        // deleted_at이 설정됨
+        Object deletedAt = entityManager
+                .createNativeQuery("SELECT deleted_at FROM post WHERE id = :id")
+                .setParameter("id", id)
+                .getSingleResult();
+        assertThat(deletedAt).isNotNull();
     }
 
     @Test
