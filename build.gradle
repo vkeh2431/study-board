@@ -49,6 +49,14 @@ dependencies {
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-security-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    // Phase 16: Testcontainers로 통합 테스트를 실 MySQL에서 실행(H2 방언 차이 제거, V1~V3 + validate 자동 검증).
+    // QueryDSL/springdoc/jjwt와 달리 이들은 Spring Boot BOM이 버전을 관리하므로 버전을 고정하지 않는다(고정 시 오히려 충돌).
+    // ⚠️ Boot 4 BOM은 Testcontainers 2.x를 끌어오는데, 2.x에서 아티팩트 ID가 바뀌었다:
+    //    junit-jupiter → testcontainers-junit-jupiter, mysql → testcontainers-mysql (구 좌표는 버전 미해결로 실패).
+    // spring-boot-testcontainers가 @ServiceConnection(컨테이너 접속정보 자동 주입)을 제공한다.
+    testImplementation 'org.springframework.boot:spring-boot-testcontainers'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-mysql'
     // H2는 이제 test 프로파일 전용 (dev/prod는 MySQL)
     testRuntimeOnly 'com.h2database:h2'
     testCompileOnly 'org.projectlombok:lombok'

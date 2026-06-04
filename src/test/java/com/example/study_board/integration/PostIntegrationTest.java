@@ -19,14 +19,13 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,14 +37,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
-@AutoConfigureMockMvc
-@ActiveProfiles("test")
 @Transactional
-class PostIntegrationTest {
+class PostIntegrationTest extends AbstractMySqlContainerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @Autowired
+    private DataSource dataSource;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -99,6 +98,15 @@ class PostIntegrationTest {
         PostResponse response = objectMapper.readValue(
                 result.getResponse().getContentAsString(), PostResponse.class);
         return response.id();
+    }
+
+    @Test
+    @DisplayName("통합 테스트가 H2가 아닌 실제 MySQL 컨테이너에 연결된다")
+    void runs_on_real_mysql() throws Exception {
+        try (Connection connection = dataSource.getConnection()) {
+            assertThat(connection.getMetaData().getURL()).contains("mysql");
+            assertThat(connection.getMetaData().getDatabaseProductName()).isEqualToIgnoringCase("MySQL");
+        }
     }
 
     @Test
