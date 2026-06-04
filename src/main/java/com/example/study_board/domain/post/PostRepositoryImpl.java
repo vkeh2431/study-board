@@ -2,6 +2,7 @@ package com.example.study_board.domain.post;
 
 import com.example.study_board.domain.category.QCategory;
 import com.example.study_board.domain.comment.QComment;
+import com.example.study_board.domain.like.QPostLike;
 import com.example.study_board.domain.member.QMember;
 import com.example.study_board.domain.tag.QPostTag;
 import com.example.study_board.domain.tag.QTag;
@@ -27,10 +28,11 @@ import java.util.Set;
 
 /**
  * 게시글 동적 검색(Phase 14). 목록은 엔티티가 아니라 {@link PostListResponse} DTO projection으로 조회한다.
- * 댓글 수는 SELECT 절 상관 COUNT 서브쿼리로 인라인하므로 컬렉션을 로딩하지 않는다 →
+ * 댓글 수·좋아요 수는 SELECT 절 상관 COUNT 서브쿼리로 인라인하므로 컬렉션을 로딩하지 않는다 →
  * "컬렉션 fetch join + Pageable 메모리 페이징" 함정을 피하고 N+1도 발생하지 않는다(Phase 8 학습노트 실구현).
+ * 서브쿼리가 2개여도 메인 SQL에 인라인되어 PreparedStatement는 content 1 + count 1 = 2건으로 고정이다.
  * Comment의 {@code @SQLRestriction("deleted_at IS NULL")}은 이 서브쿼리 SQL에도 부착되어
- * soft-deleted 댓글은 카운트에서 자동 제외된다.
+ * soft-deleted 댓글은 카운트에서 자동 제외된다(PostLike는 soft delete 대상 아님).
  */
 @RequiredArgsConstructor
 public class PostRepositoryImpl implements PostRepositoryCustom {
@@ -44,6 +46,7 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
     public Page<PostListResponse> search(PostSearchCondition condition, Pageable pageable) {
         QPost post = QPost.post;
         QComment comment = QComment.comment;
+        QPostLike postLike = QPostLike.postLike;
         QMember member = QMember.member;
         QCategory category = QCategory.category;
         QPostTag postTag = QPostTag.postTag;
@@ -61,6 +64,9 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                         JPAExpressions.select(comment.count())
                                 .from(comment)
                                 .where(comment.post.eq(post)),
+                        JPAExpressions.select(postLike.count())
+                                .from(postLike)
+                                .where(postLike.post.eq(post)),
                         post.createdAt))
                 .from(post)
                 .join(post.member, member)

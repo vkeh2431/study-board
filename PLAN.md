@@ -220,15 +220,25 @@ H2 인메모리 졸업(사용자 결정). Phase 9(프로파일/로깅/OSIV)를 �
   - ⚠️ Boot 4 노트: `flyway-core`만 추가하면 Flyway 라이브러리는 클래스패스에 있어도 Spring Boot 자동설정(`spring-boot-flyway` 모듈)이 없어 **부팅 시 마이그레이션이 실행되지 않는다**(validate가 빈 스키마에 실패). `spring-boot-starter-flyway`가 자동설정+`flyway-core`를 함께 제공
 
 ### Phase 14: QueryDSL 동적 검색 + 도메인 확장(카테고리/태그/좋아요)
-검색을 동적 쿼리로 끌어올리고, 그 가치를 보여줄 검색 조건을 위해 도메인을 확장.
-- [ ] QueryDSL 도입, `PostRepositoryCustom` + `PostRepositoryImpl`로 동적 검색(키워드+작성자+카테고리+정렬), 기존 `searchByKeyword` 대체
-- [ ] `Category`(ManyToOne) 또는 `Tag` — ManyToMany는 **중간 엔티티(`PostTag`)로 풀어쓰는 패턴** 권장
-- [ ] 좋아요(`PostLike`, member+post 유니크 제약, 카운트 집계)
-- [ ] N+1 재점검: `PostListResponse`를 COUNT 프로젝션 DTO 직접 조회로 전환(Phase 8 학습 노트의 "COUNT 서브쿼리 DTO projection" 실구현)
-- [ ] **TDD**: 동적 검색 Repository 테스트(조건 조합별 결과) Red → 구현 Green. 좋아요 중복 예외(Red) → 유니크 제약/검증(Green)
-- **배우는 것**: QueryDSL 타입세이프/동적 쿼리, `BooleanBuilder` vs `BooleanExpression`, ManyToMany를 중간 엔티티로 푸는 이유, 집계 쿼리, 유니크 제약으로 중복 방지
-- **의존성**: QueryDSL(`com.querydsl:querydsl-jpa:...:jakarta`, Gradle Q타입 생성 설정 — Spring Boot 4 환경 주의)
-- **검증**: 다중 조건 조합 검색 + 좋아요 중복 차단 테스트 GREEN
+검색을 동적 쿼리로 끌어올리고, 그 가치를 보여줄 검색 조건을 위해 도메인을 확장. 하위 4단계로 나눠 단계별 TDD 커밋.
+- [x] **14-1** QueryDSL 도입, `PostRepositoryCustom` + `PostRepositoryImpl`로 동적 검색(키워드+작성자+정렬), 기존 `searchByKeyword`/`findAll` override 대체. `search()`는 `Page<PostListResponse>` DTO projection 반환
+- [x] **14-2** `Category`(ManyToOne) + `Tag`/`PostTag`(ManyToMany 중간 엔티티). 동적 검색에 카테고리(eq)·태그(조건부 join) 추가
+- [x] **14-3** 좋아요(`PostLike`, member+post 유니크 제약, 카운트 집계), 중복 시 409(`ALREADY_LIKED`), 상세에 `likeCount`/`liked`
+- [x] **14-4** N+1 재점검: 댓글·좋아요 수를 `PostListResponse` projection의 상관 COUNT 서브쿼리로 인라인(Phase 8 "COUNT 서브쿼리 DTO projection" 실구현). `PostQueryPerformanceTest`로 statement=2 고정 단언
+- [x] **TDD**: 동적 검색 Repository 조건 조합 Red→Green, 좋아요 중복 409 Red→Green(유니크 제약 2단 방어)
+- **배우는 것**: QueryDSL 타입세이프/동적 쿼리, `BooleanExpression`(null이면 where 무시), ManyToMany를 중간 엔티티로 푸는 이유, 집계 쿼리, 유니크 제약으로 중복 방지, COUNT 서브쿼리 projection으로 N+1 회피
+- **의존성**: QueryDSL `io.github.openfeign.querydsl:querydsl-jpa:7.2`(+`querydsl-apt:7.2:jakarta`). Q타입은 Gradle 기본 출력(`build/generated/...`)
+- **검증**: ✅ 전체 테스트 GREEN(149개, +30) + MySQL dev 부팅으로 Flyway V2/V3 migrate+validate 통과 + curl(태그 검색, 카테고리/태그 상세 노출, 좋아요 201/중복 409/liked true·false/unlike 204/미인증 401) 확인
+
+#### 학습 노트: Phase 14에서 밟은 함정
+- ⚠️ **QueryDSL 버전(가장 중요)**: 정통 `com.querydsl` 5.x / OpenFeign 6.x는 Hibernate 6.x·JPA 3.1 기준이라 Boot 4(Hibernate 7.2 + jakarta.persistence 3.2)에서 **첫 동적쿼리 실행 시 `NoSuchMethodError`** 위험. OpenFeign 포크 **7.2**(Hibernate 7.x 대응)를 써야 한다. 패키지는 `com.querydsl.*`로 동일.
+- ⚠️ **`@DataJpaTest`는 전 repository를 로드**한다 → `PostRepositoryImpl`이 `JPAQueryFactory` 빈을 요구하므로 Comment/Member 슬라이스 테스트까지 `@Import(QueryDslConfig.class)`가 없으면 컨텍스트 로드 실패.
+- ⚠️ **nullable 연관관계 projection은 LEFT JOIN**: `post.category`가 nullable인데 암묵 inner join(`post.category.name`)을 쓰면 무카테고리 글이 통째 누락. 명시 `leftJoin` 필수. 태그 join도 "조건 있을 때만" + `distinct`.
+- ⚠️ **컬렉션은 단일 row projection에 못 담는다**: tagNames는 `GROUP_CONCAT` 방언 차이(H2/MySQL)로 이식성↓ → 목록 제외, 상세에서만 노출.
+- ⚠️ **COUNT 서브쿼리는 메인 SQL에 인라인**: 서브쿼리 2개(댓글·좋아요)여도 statement는 content 1 + count 1 = 2 고정. 단 `PageableExecutionUtils`가 count를 생략하는 경우가 있어 성능 테스트는 데이터>pageSize로 구성.
+- ⚠️ **orphanRemoval flush 순서**: 태그 수정 시 같은 태그를 지웠다 다시 넣으면 "insert 후 delete" 순서로 uk 충돌. diff(없앨 것만 제거 → 새 것만 추가) 방식으로 회피.
+- ⚠️ **좋아요 중복 2단 방어**: `exists` 사전 체크(정상 경로) + DB 유니크 제약 `DataIntegrityViolationException` catch(동시 요청 race 최종 방어) → 둘 다 409.
+- ⚠️ **커버리지 갭(Phase 13과 동일)**: `test`가 H2 + Flyway off라 V2/V3 SQL·MySQL validate는 자동 검증 안 됨 → 실 MySQL 부팅으로만 확인(자동화는 Phase 16 Testcontainers).
 
 ### Phase 15: Swagger/OpenAPI 문서화
 API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지 반영.

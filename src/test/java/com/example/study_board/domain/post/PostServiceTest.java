@@ -89,7 +89,7 @@ class PostServiceTest {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         PostSearchCondition condition = new PostSearchCondition("Spring", "작성자", null, null);
         Page<PostListResponse> expected = new PageImpl<>(
-                List.of(new PostListResponse(1L, "Spring 입문", "작성자", null, 0, 2L, LocalDateTime.now())),
+                List.of(new PostListResponse(1L, "Spring 입문", "작성자", "스프링", 0, 2L, 5L, LocalDateTime.now())),
                 pageable, 1);
 
         given(postRepository.search(condition, pageable)).willReturn(expected);
@@ -99,6 +99,7 @@ class PostServiceTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).title()).isEqualTo("Spring 입문");
         assertThat(result.getContent().get(0).commentCount()).isEqualTo(2L);
+        assertThat(result.getContent().get(0).likeCount()).isEqualTo(5L);
         verify(postRepository).search(condition, pageable);
     }
 
