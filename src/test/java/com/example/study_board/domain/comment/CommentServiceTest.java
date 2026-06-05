@@ -19,6 +19,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.time.LocalDateTime;
@@ -43,6 +44,9 @@ class CommentServiceTest {
 
     @Mock
     private MemberRepository memberRepository;
+
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
 
     @InjectMocks
     private CommentService commentService;
@@ -443,5 +447,73 @@ class CommentServiceTest {
 
         assertThat(comment.isDeleted()).isFalse();
         verify(commentRepository).delete(comment);
+    }
+
+    // === Phase 18: 알림 이벤트 발행 ===
+
+    private Post postWithOwner(Long postId, Long ownerId) {
+        Member owner = createMember();
+        ReflectionTestUtils.setField(owner, "id", ownerId);
+        Post post = Post.builder().title("제목").content("내용").member(owner).build();
+        ReflectionTestUtils.setField(post, "id", postId);
+        return post;
+    }
+
+    @Test
+    @DisplayName("댓글 생성 - 글 주인/작성자 정보를 담은 CommentCreatedEvent를 발행한다")
+    void create_publishes_event() {
+        Post post = postWithOwner(1L, 100L);
+        Member author = createMember();
+        ReflectionTestUtils.setField(author, "id", 7L);
+        CommentCreateRequest request = new CommentCreateRequest("댓글");
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+        given(memberRepository.findById(7L)).willReturn(Optional.of(author));
+        given(commentRepository.save(any(Comment.class))).willAnswer(inv -> {
+            Comment c = inv.getArgument(0);
+            ReflectionTestUtils.setField(c, "id", 50L);
+            return c;
+        });
+
+        commentService.create(1L, 7L, request);
+
+        ArgumentCaptor<CommentCreatedEvent> captor = ArgumentCaptor.forClass(CommentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        CommentCreatedEvent event = captor.getValue();
+        assertThat(event.commentId()).isEqualTo(50L);
+        assertThat(event.postId()).isEqualTo(1L);
+        assertThat(event.postOwnerId()).isEqualTo(100L);
+        assertThat(event.actorId()).isEqualTo(7L);
+        assertThat(event.actorName()).isEqualTo("댓글 작성자");
+        assertThat(event.parentCommentId()).isNull();
+        assertThat(event.parentOwnerId()).isNull();
+    }
+
+    @Test
+    @DisplayName("대댓글 생성 - 이벤트에 부모 댓글 주인(parentOwnerId)이 담긴다")
+    void create_reply_publishes_event_with_parent_owner() {
+        Post post = postWithOwner(1L, 100L);
+        Member author = createMember();
+        ReflectionTestUtils.setField(author, "id", 7L);
+        Member parentOwner = createMember();
+        ReflectionTestUtils.setField(parentOwner, "id", 200L);
+        Comment parent = Comment.builder().content("부모").member(parentOwner).post(post).build();
+        ReflectionTestUtils.setField(parent, "id", 10L);
+        CommentCreateRequest request = new CommentCreateRequest("대댓글", 10L);
+
+        given(postRepository.findById(1L)).willReturn(Optional.of(post));
+        given(memberRepository.findById(7L)).willReturn(Optional.of(author));
+        given(commentRepository.findById(10L)).willReturn(Optional.of(parent));
+        given(commentRepository.save(any(Comment.class))).willAnswer(inv -> inv.getArgument(0));
+
+        commentService.create(1L, 7L, request);
+
+        ArgumentCaptor<CommentCreatedEvent> captor = ArgumentCaptor.forClass(CommentCreatedEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        CommentCreatedEvent event = captor.getValue();
+        assertThat(event.parentCommentId()).isEqualTo(10L);
+        assertThat(event.parentOwnerId()).isEqualTo(200L);
+        assertThat(event.postOwnerId()).isEqualTo(100L);
+        assertThat(event.actorId()).isEqualTo(7L);
     }
 }

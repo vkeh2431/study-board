@@ -20,6 +20,7 @@ import com.example.study_board.global.exception.ForbiddenException;
 import com.example.study_board.global.exception.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +33,7 @@ public class CommentService {
     private final CommentRepository commentRepository;
     private final PostRepository postRepository;
     private final MemberRepository memberRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public CommentResponse create(Long postId, Long memberId, CommentCreateRequest request) {
@@ -49,6 +51,15 @@ public class CommentService {
         Comment saved = commentRepository.save(comment);
         log.info("댓글 생성 완료: id={}, postId={}, parentId={}, author={}",
                 saved.getId(), postId, request.parentId(), member.getUsername());
+
+        // 알림 도메인 이벤트 발행(Phase 18). 알림 생성을 직접 호출하지 않아 결합이 끊긴다.
+        // 수신자 산출에 필요한 식별자는 트랜잭션 안(LAZY 프록시 접근 가능)에서 FK id로만 뽑아 원시값으로 싣는다.
+        Long postOwnerId = post.getMember().getId();
+        Long parentOwnerId = (parent != null) ? parent.getMember().getId() : null;
+        eventPublisher.publishEvent(new CommentCreatedEvent(
+                saved.getId(), postId, post.getTitle(), postOwnerId,
+                request.parentId(), parentOwnerId, memberId, member.getUsername()));
+
         return CommentResponse.from(saved);
     }
 

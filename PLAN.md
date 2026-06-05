@@ -309,18 +309,27 @@ API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지
 - ⚠️ **LAZY 프록시 init 주의**: tombstone은 작성자를 숨기므로 `getMember().getUsername()`을 호출하면 안 된다(프록시 초기화/작성자 노출/N+1). `treeNode` 마스킹 분기에서 member 접근을 건너뛴다. 반면 `getParentId()`는 `parent.getId()`(FK)만 읽어 init 없음(단, 같은 게시글의 부모는 결과셋에 함께 로드돼 이미 초기화된 상태로 비교됨).
 - 💡 **인접 리스트 vs 대안**: adjacency list(채택, `parent_id` 1컬럼·쓰기 단순·임의 깊이 조회는 앱에서 조립) vs 경로 열거(`path` 문자열, 하위트리 LIKE 조회 빠름·무결성 약함) vs 클로저 테이블(별도 ancestor-descendant 테이블, 조회 강력·쓰기/저장 비용↑). 학습 프로젝트는 단순성과 무한 depth를 메모리 조립으로 커버하는 adjacency list가 적합.
 
-### Phase 18: 알림 (이벤트 기반 + 비동기)
+### Phase 18: 알림 (이벤트 기반 + 비동기 + SSE)
 "내 글/댓글에 댓글이 달리면 알림". 댓글 로직과 알림 로직을 **이벤트로 분리(decoupling)**하는 설계 감각이 핵심.
-- [ ] `Notification` 엔티티: 수신자(`@ManyToOne Member`), `type`(enum: COMMENT_ON_POST 등), `message`, `read`(boolean), 연관 리소스 id(postId 등), `createdAt`
-- [ ] **이벤트 발행**: `CommentService.create`에서 `ApplicationEventPublisher`로 `CommentCreatedEvent` 발행(알림 생성 로직을 직접 호출하지 않는다 — 결합 제거)
-- [ ] **이벤트 수신**: `@TransactionalEventListener(phase = AFTER_COMMIT)`로 댓글 **커밋 후** 알림 생성 + `@Async`로 비동기 처리(`@EnableAsync`). "왜 AFTER_COMMIT인가"(롤백 시 알림 안 감), "별도 스레드의 트랜잭션·영속성 컨텍스트 분리 주의" 기록
-- [ ] **본인 예외**: 본인 글에 본인이 댓글 → 알림 생성 안 함
-- [ ] 알림 API: `GET /api/notifications`(내 알림 목록, 미읽음 우선), `PATCH /api/notifications/{id}/read`(읽음 처리). 본인 알림만 접근(Phase 12 소유권 인가 연계)
-- [ ] (선택) **SSE 실시간 푸시**: `SseEmitter`로 미읽음 알림 실시간 전달 — 여유 시
-- [ ] **TDD 순서**: ①`CommentService.create` 호출 시 이벤트 발행 검증(`ApplicationEvents` 또는 publisher mock, Red→Green) → ②리스너가 `CommentCreatedEvent` 수신 시 알림 생성(타인 글) / 본인 글 댓글은 미생성 → ③알림 목록·읽음 처리 Controller 슬라이스 → ④(선택) SSE 수신 통합 테스트
-- **배우는 것**: `ApplicationEventPublisher`/`@EventListener`, `@TransactionalEventListener`(AFTER_COMMIT) 트랜잭션 경계, `@Async` 비동기와 별도 스레드의 영속성 컨텍스트 함정, 도메인 이벤트 패턴(결합도 낮추기), (선택) SSE
-- **의존성**: 코어(추가 의존성 없음). SSE는 spring-web 기본 제공
-- **검증**: 타인이 내 글에 댓글 → 알림 생성, 본인 댓글 → 알림 없음, 읽음 처리 동작, (선택) SSE로 실시간 수신
+- [x] `Notification` 엔티티: 수신자(`@ManyToOne(LAZY) Member`), `type`(enum: COMMENT_ON_POST/REPLY_ON_COMMENT), `message`(생성 시점 박제), `read`(boolean→`is_read`), 연관 리소스 id(`postId`/`commentId`, FK 없는 비정규화), 감사 컬럼(BaseTimeEntity). `isRecipient`/`markAsRead` 헬퍼
+- [x] **이벤트 발행**: `CommentService.create`에서 `ApplicationEventPublisher`로 `CommentCreatedEvent`(원시값만) 발행. 수신자 산출용 식별자(`postOwnerId`/`parentOwnerId`)는 **트랜잭션 안에서 FK id로 미리 뽑아** 싣는다(리스너 스레드엔 영속성 컨텍스트 없음)
+- [x] **이벤트 수신**: `NotificationEventListener` `@Async("notificationExecutor")` + `@TransactionalEventListener(AFTER_COMMIT)` → `NotificationService.createForComment`. `AsyncConfig`에 `@EnableAsync` + 커스텀 `ThreadPoolTaskExecutor`(core2/max5/queue100/`notify-` prefix/CallerRunsPolicy)
+- [x] **본인 예외**: 수신자 == 작성자면 알림 생성 안 함. 수신자 정책은 **단일**(루트 댓글→글 주인 COMMENT_ON_POST, 대댓글→부모 댓글 주인 REPLY_ON_COMMENT)로, 깊은 대댓글이 글 주인을 스팸하지 않게 함
+- [x] 알림 API: `GET /api/notifications`(미읽음 우선=`findByRecipientIdOrderByReadAscCreatedAtDesc`), `PATCH /api/notifications/{id}/read`(읽음, 404→403 순), `GET /api/notifications/unread-count`(보너스). 본인 알림만 접근(Phase 12 연계)
+- [x] **SSE 실시간 푸시**: `SseEmitterRepository`(memberId 1:N, 스레드세이프) + `NotificationSseService`(subscribe=연결+connect 이벤트, send=각 emitter 푸시·끊긴 연결 정리). `GET /api/notifications/subscribe`(text/event-stream). 알림 생성 후 같은 파이프라인에서 push — **댓글/알림 생성 코드 무수정**으로 채널만 추가
+- [x] **TDD 순서**: ①Repository(`@DataJpaTest` 미읽음 우선 정렬) → ②`CommentServiceTest` 이벤트 발행 검증(publisher mock+ArgumentCaptor) → ③`NotificationServiceTest`(타인 글 생성/본인 미생성/대댓글 REPLY/읽음 404·403) → ④리스너 위임 단위 → ⑤Controller 슬라이스(목록/읽음/SSE 스트림 200) → ⑥SSE 단위(registry/service) → ⑦`NotificationIntegrationTest`(Testcontainers, 비트랜잭션+Awaitility) + `NotificationSseE2eTest`(RANDOM_PORT+JDK HttpClient 실시간 푸시)
+- **배우는 것**: `ApplicationEventPublisher`/`@TransactionalEventListener`(AFTER_COMMIT) 트랜잭션 경계, `@Async` 비동기와 별도 스레드의 영속성 컨텍스트·SecurityContext 분리 함정, 도메인 이벤트 패턴(결합도 낮추기), 커스텀 스레드 풀, SSE 실시간 전송, 비동기 통합 테스트(Awaitility)
+- **의존성**: 코어(추가 의존성 없음). SSE는 spring-web 기본 제공, Awaitility는 test 스타터에 transitive(4.3.0)
+- **검증**: ✅ 전체 테스트 GREEN(211개, +33) + Testcontainers 실 MySQL 8.4에서 Flyway V1~V5 migrate + `validate` 통과(`is_read BIT`·recipient FK) + 타인 댓글→COMMENT_ON_POST/대댓글→REPLY_ON_COMMENT 알림 비동기 생성, 본인 댓글→미생성, 읽음 204·타인 403, SSE 스트림으로 실시간 푸시 수신
+
+#### 학습 노트: Phase 18에서 밟은 함정
+- ⚠️ **AFTER_COMMIT + @Async 트랜잭션(핵심)**: 동일 스레드 AFTER_COMMIT 단계는 원 트랜잭션이 이미 끝나 거기서 DB 쓰기를 해도 커밋되지 않는다(별도 `REQUIRES_NEW` 필요). `@Async`로 **새 스레드**에 들어가면 `createForComment`의 `@Transactional`이 깨끗한 새 트랜잭션을 열어 이 함정을 자연스럽게 푼다. 왜 AFTER_COMMIT인가 = 댓글이 롤백되면 "유령 알림"이 안 생기게.
+- ⚠️ **이벤트는 원시값만**: 리스너는 커밋 후 별도 스레드라 영속성 컨텍스트가 없다. 엔티티/LAZY 프록시를 이벤트에 실으면 detached 접근·`LazyInitializationException`. 그래서 수신자 식별자/표시 문자열을 **트랜잭션 안(프록시 접근 가능)에서 FK id로 미리 뽑아** record에 원시값으로만 싣는다.
+- ⚠️ **@Async 스레드는 SecurityContext 미상속** → `AuditorAware`가 비어 알림의 `created_by`는 NULL(회원가입과 동일 결). 전파하려면 `DelegatingSecurityContextExecutor`. 알림을 "누가 유발했는지"는 `message`에 박제해 해결.
+- ⚠️ **`read` 예약어 + boolean→bit**: `read`는 MySQL 예약어라 컬럼명 `is_read`로 회피. 또 Hibernate 7.2 MySQLDialect가 boolean을 `BIT`으로 매핑하므로 V5도 `is_read BIT NOT NULL DEFAULT 0`(Phase 17 재현). test(H2)는 안 걸리고 Testcontainers(실 MySQL+validate)만 잡는다.
+- ⚠️ **비동기 통합 테스트는 비트랜잭션 + Awaitility**: 테스트가 `@Transactional`이면 댓글이 커밋되지 않아 AFTER_COMMIT이 영원히 안 뜬다. 비트랜잭션으로 실제 커밋을 일으키고 `Awaitility`로 비동기 생성을 기다린다(부재 검증은 `pollDelay`로 시간 준 뒤 0 확인). 정리는 `JdbcTemplate` 네이티브 DELETE — 단, 대댓글 자기참조(`parent_id`) 때문에 `UPDATE comment SET parent_id=NULL`로 먼저 끊어야 `DELETE FROM comment`가 self-FK 위반 없이 지운다.
+- 💡 **SSE는 전달 채널일 뿐**: 같은 `CommentCreatedEvent` 파이프라인에 구독자(emitter push)만 추가해 실시간 전송을 붙였다 — 댓글/알림 생성 로직은 한 줄도 안 바뀜. 이게 이벤트 기반 decoupling의 보상이자 면접 클라이맥스. 인메모리 emitter라 스케일아웃 시엔 Redis Pub/Sub로 브로드캐스트가 필요(학습 범위 밖). e2e는 실 포트(RANDOM_PORT)로 스트림을 열되 댓글 트리거는 같은 컨텍스트의 MockMvc로 보내, 같은 `SseEmitterRepository` 빈을 공유해 푸시를 검증한다.
+- 💡 **단일 수신자 정책**: post 주인+parent 주인 양쪽에 다 보내면 깊은 대댓글이 글 주인을 스팸한다 → 루트=글 주인, 대댓글=부모 댓글 주인의 단일 수신자로 결정(중복/스팸 회피).
 
 #### 우선순위 요약 (기능 확장)
 
