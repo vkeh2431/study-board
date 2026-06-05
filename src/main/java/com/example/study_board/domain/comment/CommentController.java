@@ -22,7 +22,8 @@ public class CommentController {
 
     private final CommentService commentService;
 
-    @Operation(summary = "댓글 작성", description = "게시글에 댓글을 작성한다. 작성자는 토큰에서 주입된다.")
+    @Operation(summary = "댓글/대댓글 작성",
+            description = "게시글에 댓글을 작성한다. parentId를 지정하면 같은 게시글의 그 댓글에 대댓글이 달린다(무제한 depth). 작성자는 토큰에서 주입된다.")
     @PostMapping("/api/posts/{postId}/comments")
     public ResponseEntity<CommentResponse> create(
             @PathVariable Long postId,
@@ -32,7 +33,8 @@ public class CommentController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-    @Operation(summary = "댓글 목록 조회", description = "게시글의 댓글을 작성일 내림차순으로 조회한다.")
+    @Operation(summary = "댓글 목록 조회(트리)",
+            description = "게시글의 댓글을 계층 트리로 조회한다. 루트 댓글은 작성일 내림차순, 각 대댓글(replies)은 작성순. 자식이 있는 삭제 댓글은 본문이 '삭제된 댓글입니다'로 가려진 채 트리에 남는다.")
     @GetMapping("/api/posts/{postId}/comments")
     public ResponseEntity<List<CommentResponse>> findByPostId(@PathVariable Long postId) {
         List<CommentResponse> responses = commentService.findByPostId(postId);

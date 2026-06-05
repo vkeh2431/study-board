@@ -292,14 +292,22 @@ API/인증이 안정된 뒤 문서화(재작업 최소). JWT 인증 헤더까지
 
 ### Phase 17: 대댓글 (계층형 댓글)
 게시판에 가장 자연스러운 확장. JPA 자기참조(self-join)와 트리 직렬화를 익힌다.
-- [ ] `Comment`에 자기참조 추가: `parent`(`@ManyToOne(fetch=LAZY)`, 자기 자신 참조), `children`(`@OneToMany(mappedBy="parent")`). **인접 리스트(adjacency list) 모델**
-- [ ] depth 정책 결정: 단순화를 위해 **1-depth(댓글→대댓글)까지만** 허용(루트 댓글에만 대댓글 가능) 또는 무제한 중 택1 — 학습 후 README에 트레이드오프 기록
-- [ ] 대댓글 작성 API: `POST /api/posts/{postId}/comments`에 `parentId`(nullable) 추가, parent의 post 일치 검증
-- [ ] 조회 시 트리 구성: 루트 댓글 + `replies` 재귀 구조 응답 DTO(`CommentResponse`에 `List<CommentResponse> replies`). 계층 댓글 **N+1 주의**(Phase 8 연계 — `@EntityGraph` 또는 한 번에 로딩 후 메모리에서 트리 조립)
-- [ ] **삭제 정책**: 자식이 있는 부모 댓글 삭제 시 물리 삭제 대신 `"삭제된 댓글입니다"` soft delete 패턴(Phase 13의 `deletedAt` 연계). 자식 없으면 실제 삭제
-- [ ] **TDD 순서**: ①`@DataJpaTest`로 자기참조 저장·부모-자식 조회(Red→Green) → ②Service 트리 구성 로직(평면 리스트 → 트리, 단위 테스트) → ③Controller `parentId`로 대댓글 작성 슬라이스 → ④자식 있는 부모 삭제 시 soft delete 동작
+- [x] `Comment`에 자기참조 추가: `parent`(`@ManyToOne(fetch=LAZY)`, 자기 자신 참조), `children`(`@OneToMany(mappedBy="parent")`, 조회 미사용=N+1 회피). **인접 리스트(adjacency list) 모델** + `getParentId()`(FK read) / `markDeleted()`(tombstone)
+- [x] depth 정책 결정: **무제한(재귀 트리)** 선택(사용자 결정) — 어떤 댓글에든 대댓글 가능, depth 제한 없음. 1-depth와의 트레이드오프는 아래 학습 노트
+- [x] 대댓글 작성 API: `POST /api/posts/{postId}/comments`에 `parentId`(nullable) 추가, 부모 없으면 404·부모가 다른 게시글이면 400(BAD_REQUEST) 검증(`CommentService.resolveParent`)
+- [x] 조회 시 트리 구성: 루트 댓글 + `replies` 재귀 구조 응답 DTO(`CommentResponse`에 `parentId`/`deleted`/`List<CommentResponse> replies`). 계층 댓글 **N+1 회피** — 평면 1쿼리(`findByPostIdOrderByCreatedAtDesc`, `@EntityGraph(member)`) → 메모리 O(n) Map 조립(Phase 8 연계). 루트 DESC·대댓글 ASC
+- [x] **삭제 정책(2축)**: 자식 있는 댓글 삭제 → tombstone(별도 `deleted` boolean=true, 본문만 `"삭제된 댓글입니다"`로 마스킹, 트리 유지). 자식 없으면 기존 하드 soft delete(`@SQLDelete`=`deleted_at`, 트리에서 제거). 분기 기준 `countByParentId>0`
+- [x] **TDD 순서**: ①`@DataJpaTest` 자기참조 저장·`countByParentId`·tombstone 노출(Red→Green) → ②Service 트리 조립(평면→트리)·parentId 검증·삭제 분기 단위 테스트 → ③Controller `parentId` 슬라이스·트리 JSON·tombstone → ④`CommentIntegrationTest`(Testcontainers 실 MySQL) 대댓글·tombstone e2e + V4 validate
 - **배우는 것**: 자기참조 연관관계, 인접 리스트 vs 경로 열거(path enumeration) vs 클로저 테이블 비교(면접 포인트), 트리 직렬화, 계층 댓글 N+1, 부모 삭제 정책
-- **검증**: 댓글에 대댓글 작성 → 트리 형태 응답, depth 정책 동작, 자식 있는 부모 삭제 시 본문만 가려지고 트리 유지
+- **검증**: ✅ 전체 테스트 GREEN(178개, +23) + Testcontainers 실 MySQL 8.4에서 Flyway V1~V4 migrate + `validate` 통과(parent_id·`deleted BIT`·self-FK) + 대댓글 무제한 depth 트리 e2e + 자식 있는 부모 삭제 시 본문 마스킹·트리 유지, 자식 없는 댓글 삭제 시 트리에서 제거, 부모/게시글 불일치 400
+
+#### 학습 노트: Phase 17에서 밟은 함정
+- ⚠️ **2축 삭제 모델(핵심)**: "삭제된 댓글입니다"로 부모를 **보이게** 남기려는 요구가 Phase 13의 `@SQLRestriction("deleted_at IS NULL")`(=숨김)과 충돌한다. → `deleted_at`(하드 soft delete=조회 제외)과 별개로 **`deleted` boolean(tombstone=조회 노출, 본문만 마스킹)** 축을 분리. tombstone은 `repository.delete()`(=@SQLDelete) 대신 `markDeleted()`(dirty checking)로 처리해 `deleted_at`을 건드리지 않는다. 원문은 DB 보존, 마스킹은 응답 DTO에서만(비파괴).
+- ⚠️ **`boolean`→`bit` validate 함정**: Hibernate 7.2 `MySQLDialect`은 Java `boolean`을 `bit`으로 매핑한다. V4를 `BOOLEAN`(=`tinyint(1)`)로 쓰면 `ddl-auto=validate`가 불일치로 부팅 실패 → **`deleted BIT NOT NULL DEFAULT 0`**으로 통일. test(H2 create-drop)는 엔티티가 스키마를 만들어 안 걸리고, Testcontainers(실 MySQL+validate)만이 이 정합성을 자동 검증한다.
+- ⚠️ **파생 쿼리명 vs 헬퍼 getter 충돌**: `getParentId()` 헬퍼를 추가하면 Spring Data가 `parentId`를 빈 프로퍼티로 오인해 파생 쿼리 `countByParentId`가 잘못된 경로 `c.parentId`를 만들어 `UnknownPathException`. → 명시 `@Query("... where c.parent.id = :parentId")`로 우회(`@SQLRestriction`은 이 JPQL에도 적용돼 하드 삭제 자식 제외).
+- ⚠️ **메모리 트리 조립 + 고아 승격**: `children` LAZY를 navigate하지 않고 평면 리스트를 Map으로 O(n) 조립(계층 N+1 0). 부모가 동시성으로 하드 삭제돼 목록에 없는 **고아 대댓글은 루트로 승격**해 누락을 막는다. 자기참조라 사이클은 생성 순서상 불가.
+- ⚠️ **LAZY 프록시 init 주의**: tombstone은 작성자를 숨기므로 `getMember().getUsername()`을 호출하면 안 된다(프록시 초기화/작성자 노출/N+1). `treeNode` 마스킹 분기에서 member 접근을 건너뛴다. 반면 `getParentId()`는 `parent.getId()`(FK)만 읽어 init 없음(단, 같은 게시글의 부모는 결과셋에 함께 로드돼 이미 초기화된 상태로 비교됨).
+- 💡 **인접 리스트 vs 대안**: adjacency list(채택, `parent_id` 1컬럼·쓰기 단순·임의 깊이 조회는 앱에서 조립) vs 경로 열거(`path` 문자열, 하위트리 LIKE 조회 빠름·무결성 약함) vs 클로저 테이블(별도 ancestor-descendant 테이블, 조회 강력·쓰기/저장 비용↑). 학습 프로젝트는 단순성과 무한 depth를 메모리 조립으로 커버하는 adjacency list가 적합.
 
 ### Phase 18: 알림 (이벤트 기반 + 비동기)
 "내 글/댓글에 댓글이 달리면 알림". 댓글 로직과 알림 로직을 **이벤트로 분리(decoupling)**하는 설계 감각이 핵심.
