@@ -12,8 +12,9 @@ public record PostUpdateRequest(
         @Size(max = 200, message = "제목은 200자 이하여야 합니다")
         String title,
 
-        @Schema(description = "본문 내용", example = "내용을 수정합니다.")
+        @Schema(description = "본문 내용(최대 50000자)", example = "내용을 수정합니다.")
         @NotBlank(message = "내용은 필수입니다")
+        @Size(max = 50000, message = "내용은 50000자 이하여야 합니다")
         String content,
 
         @Schema(description = "카테고리 ID(PUT 전체 교체: null이면 카테고리 해제)", example = "2")

@@ -100,6 +100,19 @@ class CommentControllerTest {
     }
 
     @Test
+    @DisplayName("댓글 생성 시 내용이 한계를 초과하면 400 에러")
+    @WithMockCustomUser
+    void create_comment_with_too_long_content_returns_400() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest("a".repeat(1001));
+
+        mockMvc.perform(post("/api/posts/1/comments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+    }
+
+    @Test
     @DisplayName("게시글의 댓글 목록 조회")
     void findByPostId_comments() throws Exception {
         List<CommentResponse> responses = List.of(

@@ -12,8 +12,9 @@ public record PostCreateRequest(
         @Size(max = 200, message = "제목은 200자 이하여야 합니다")
         String title,
 
-        @Schema(description = "본문 내용", example = "오늘은 JPA 연관관계를 정리했다.")
+        @Schema(description = "본문 내용(최대 50000자)", example = "오늘은 JPA 연관관계를 정리했다.")
         @NotBlank(message = "내용은 필수입니다")
+        @Size(max = 50000, message = "내용은 50000자 이하여야 합니다")
         String content,
 
         @Schema(description = "카테고리 ID(선택, null이면 미지정)", example = "1")

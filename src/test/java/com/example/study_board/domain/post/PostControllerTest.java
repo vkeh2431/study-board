@@ -161,6 +161,19 @@ class PostControllerTest {
     }
 
     @Test
+    @DisplayName("게시글 생성 시 본문이 한계를 초과하면 400 에러")
+    @WithMockCustomUser
+    void create_post_with_too_long_content_returns_400() throws Exception {
+        PostCreateRequest request = new PostCreateRequest("제목", "a".repeat(50001), null, null);
+
+        mockMvc.perform(post("/api/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+    }
+
+    @Test
     @DisplayName("게시글 단건 조회")
     void find_post_by_id() throws Exception {
         PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 1, 0L, false,

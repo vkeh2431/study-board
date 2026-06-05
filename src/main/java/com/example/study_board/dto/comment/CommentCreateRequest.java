@@ -2,10 +2,12 @@ package com.example.study_board.dto.comment;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 public record CommentCreateRequest(
-        @Schema(description = "댓글 내용", example = "좋은 글이네요!")
+        @Schema(description = "댓글 내용(최대 1000자)", example = "좋은 글이네요!")
         @NotBlank(message = "내용은 필수입니다")
+        @Size(max = 1000, message = "댓글은 1000자 이하여야 합니다")
         String content,
 
         @Schema(description = "부모 댓글 ID (대댓글일 때만 지정). 루트 댓글이면 null/생략. parent는 같은 게시글의 댓글이어야 한다.",
