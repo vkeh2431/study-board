@@ -361,4 +361,37 @@ class PostRepositoryTest {
         assertThat(firstPage.isFirst()).isTrue();
         assertThat(firstPage.isLast()).isFalse();
     }
+
+    @Test
+    @DisplayName("허용된 정렬 키(viewCount)로 동적 정렬된다")
+    void search_sorts_by_allowed_view_count() {
+        Post low = postRepository.saveAndFlush(createPost("조회수 낮음", "내용"));
+        Post high = postRepository.saveAndFlush(createPost("조회수 높음", "내용"));
+        postRepository.incrementViewCount(high.getId()); // high: viewCount 1, low: 0
+        entityManager.flush();
+        entityManager.clear();
+
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "viewCount"));
+        Page<PostListResponse> result =
+                postRepository.search(new PostSearchCondition(null, null, null, null), pageable);
+
+        assertThat(result.getContent())
+                .extracting(PostListResponse::id)
+                .containsExactly(high.getId(), low.getId());
+    }
+
+    @Test
+    @DisplayName("화이트리스트 밖 정렬 키(member.password 등)는 무시하고 예외 없이 전체를 반환한다 (정렬 주입 방지)")
+    void search_ignores_disallowed_sort_property() {
+        postRepository.save(createPost("제목1", "내용1"));
+        postRepository.save(createPost("제목2", "내용2"));
+
+        // 허용 컬럼이 아닌 임의 경로로 정렬을 시도해도 UnknownPathException 등으로 깨지지 않고 기본 정렬로 폴백한다
+        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.ASC, "member.password"));
+        Page<PostListResponse> result =
+                postRepository.search(new PostSearchCondition(null, null, null, null), pageable);
+
+        assertThat(result.getContent()).hasSize(2);
+        assertThat(result.getTotalElements()).isEqualTo(2);
+    }
 }
