@@ -19,6 +19,7 @@ import org.springframework.data.domain.*;
 import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -29,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -77,6 +79,16 @@ class PostControllerTest {
                 .andExpect(jsonPath("$.content[0].title").value("제목1"))
                 .andExpect(jsonPath("$.totalElements").value(1))
                 .andExpect(jsonPath("$.totalPages").value(1));
+
+        // 파라미터 없이 호출하면 @PageableDefault(size=10, createdAt DESC)가 서비스로 전달되어야 한다
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(postService).findAll(any(PostSearchCondition.class), pageableCaptor.capture());
+        Pageable captured = pageableCaptor.getValue();
+        assertThat(captured.getPageNumber()).isZero();
+        assertThat(captured.getPageSize()).isEqualTo(10);
+        Sort.Order order = captured.getSort().getOrderFor("createdAt");
+        assertThat(order).isNotNull();
+        assertThat(order.getDirection()).isEqualTo(Sort.Direction.DESC);
     }
 
     @Test
@@ -94,6 +106,15 @@ class PostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].title").value("Spring Boot 입문"))
                 .andExpect(jsonPath("$.totalElements").value(1));
+
+        // keyword 쿼리 파라미터가 PostSearchCondition으로 바인딩되어 서비스에 전달되어야 한다
+        ArgumentCaptor<PostSearchCondition> conditionCaptor = ArgumentCaptor.forClass(PostSearchCondition.class);
+        verify(postService).findAll(conditionCaptor.capture(), any(Pageable.class));
+        PostSearchCondition captured = conditionCaptor.getValue();
+        assertThat(captured.keyword()).isEqualTo("Spring");
+        assertThat(captured.author()).isNull();
+        assertThat(captured.categoryId()).isNull();
+        assertThat(captured.tag()).isNull();
     }
 
     @Test
@@ -114,6 +135,13 @@ class PostControllerTest {
                 .andExpect(jsonPath("$.content[0].title").value("제목6"))
                 .andExpect(jsonPath("$.totalElements").value(10))
                 .andExpect(jsonPath("$.totalPages").value(2));
+
+        // page/size 쿼리 파라미터가 Pageable로 바인딩되어 서비스에 전달되어야 한다
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(postService).findAll(any(PostSearchCondition.class), pageableCaptor.capture());
+        Pageable captured = pageableCaptor.getValue();
+        assertThat(captured.getPageNumber()).isEqualTo(1);
+        assertThat(captured.getPageSize()).isEqualTo(5);
     }
 
     @Test

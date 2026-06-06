@@ -16,6 +16,7 @@ import com.example.study_board.global.security.RestAccessDeniedHandler;
 import com.example.study_board.global.security.RestAuthenticationEntryPoint;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -24,8 +25,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import tools.jackson.databind.ObjectMapper;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -66,6 +69,14 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.email").value("user@example.com"))
                 .andExpect(jsonPath("$.role").value("USER"));
+
+        // 요청 본문이 SignupRequest로 역직렬화되어 서비스에 그대로 전달되어야 한다
+        ArgumentCaptor<SignupRequest> captor = ArgumentCaptor.forClass(SignupRequest.class);
+        verify(memberService).signup(captor.capture());
+        SignupRequest captured = captor.getValue();
+        assertThat(captured.email()).isEqualTo("user@example.com");
+        assertThat(captured.username()).isEqualTo("유저");
+        assertThat(captured.password()).isEqualTo("password123");
     }
 
     @Test
@@ -94,6 +105,13 @@ class AuthControllerTest {
                 .andExpect(jsonPath("$.accessToken").value("access-token"))
                 .andExpect(jsonPath("$.refreshToken").value("refresh-token"))
                 .andExpect(jsonPath("$.grantType").value("Bearer"));
+
+        // 요청 본문이 LoginRequest로 역직렬화되어 서비스에 그대로 전달되어야 한다
+        ArgumentCaptor<LoginRequest> captor = ArgumentCaptor.forClass(LoginRequest.class);
+        verify(authService).login(captor.capture());
+        LoginRequest captured = captor.getValue();
+        assertThat(captured.email()).isEqualTo("user@example.com");
+        assertThat(captured.password()).isEqualTo("password123");
     }
 
     @Test
