@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 import jakarta.persistence.EntityManager;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -75,6 +76,14 @@ class CommentRepositoryTest {
                 .build();
     }
 
+    /** created_at을 결정적으로 제어해 정렬 테스트의 타임스탬프 동률(flaky)을 막는다. */
+    private void setCreatedAt(Long id, LocalDateTime createdAt) {
+        entityManager.createNativeQuery("UPDATE comment SET created_at = :t WHERE id = :id")
+                .setParameter("t", createdAt)
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     @Test
     @DisplayName("댓글 저장")
     void save_comment() {
@@ -103,17 +112,27 @@ class CommentRepositoryTest {
     }
 
     @Test
-    @DisplayName("게시글 ID로 댓글 목록 조회 - 최신순 정렬")
+    @DisplayName("게시글 ID로 댓글 목록 조회 - 최신순(createdAt DESC) 정렬")
     void findByPostIdOrderByCreatedAtDesc_comments() {
         Post post = postRepository.save(createPost());
-        commentRepository.save(createComment(post, "첫 번째 댓글"));
-        commentRepository.save(createComment(post, "두 번째 댓글"));
+        // 저장 순서(c1,c2,c3)와 createdAt 순서를 일부러 어긋나게 해서, ORDER BY createdAt DESC가
+        // 빠지면(=삽입순/임의순 반환) 단언이 깨지도록 한다.
+        Comment c1 = commentRepository.save(createComment(post, "가장 오래된 댓글"));
+        Comment c2 = commentRepository.save(createComment(post, "가장 최신 댓글"));
+        Comment c3 = commentRepository.save(createComment(post, "중간 댓글"));
+        entityManager.flush();
+
+        LocalDateTime base = LocalDateTime.of(2026, 1, 1, 0, 0);
+        setCreatedAt(c1.getId(), base);
+        setCreatedAt(c2.getId(), base.plusMinutes(2));
+        setCreatedAt(c3.getId(), base.plusMinutes(1));
+        entityManager.flush();
+        entityManager.clear();
 
         List<Comment> comments = commentRepository.findByPostIdOrderByCreatedAtDesc(post.getId());
 
-        assertThat(comments).hasSize(2);
-        assertThat(comments.get(0).getContent()).isEqualTo("두 번째 댓글");
-        assertThat(comments.get(1).getContent()).isEqualTo("첫 번째 댓글");
+        assertThat(comments).extracting(Comment::getContent)
+                .containsExactly("가장 최신 댓글", "중간 댓글", "가장 오래된 댓글");
     }
 
     @Test
