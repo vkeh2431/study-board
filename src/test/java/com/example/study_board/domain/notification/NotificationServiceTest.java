@@ -169,10 +169,14 @@ class NotificationServiceTest {
     }
 
     @Test
-    @DisplayName("미읽음 개수 - repository에 위임")
+    @DisplayName("미읽음 개수 - 요청 memberId로 repository 메서드를 호출하고 결과를 그대로 반환한다")
     void countUnread_delegates() {
         given(notificationRepository.countByRecipientIdAndReadFalse(1L)).willReturn(3L);
 
-        assertThat(notificationService.countUnread(1L)).isEqualTo(3L);
+        long result = notificationService.countUnread(1L);
+
+        // 순수 위임: 올바른 memberId로 올바른 repository 메서드를 호출하고 그 결과를 가공 없이 반환하는지가 계약
+        verify(notificationRepository).countByRecipientIdAndReadFalse(1L);
+        assertThat(result).isEqualTo(3L);
     }
 }

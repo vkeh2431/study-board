@@ -85,38 +85,21 @@ class PostServiceTest {
     }
 
     @Test
-    @DisplayName("검색 조건과 페이지 정보를 repository.search에 위임하고 결과를 그대로 반환한다")
+    @DisplayName("목록 조회 - 받은 검색 조건/페이지 정보를 변형 없이 repository.search에 위임하고 그 결과를 그대로 반환한다")
     void findAll_delegates_to_repository_search() {
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         PostSearchCondition condition = new PostSearchCondition("Spring", "작성자", null, null);
-        Page<PostListResponse> expected = new PageImpl<>(
+        Page<PostListResponse> repositoryResult = new PageImpl<>(
                 List.of(new PostListResponse(1L, "Spring 입문", "작성자", "스프링", 0, 2L, 5L, LocalDateTime.now())),
                 pageable, 1);
 
-        given(postRepository.search(condition, pageable)).willReturn(expected);
+        given(postRepository.search(condition, pageable)).willReturn(repositoryResult);
 
         Page<PostListResponse> result = postService.findAll(condition, pageable);
 
-        assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getContent().get(0).title()).isEqualTo("Spring 입문");
-        assertThat(result.getContent().get(0).commentCount()).isEqualTo(2L);
-        assertThat(result.getContent().get(0).likeCount()).isEqualTo(5L);
+        // 순수 위임: 인자를 스왑/변형 없이 그대로 넘기고(정확 인자 verify), repository 결과를 가공 없이 반환한다(동일 객체)
         verify(postRepository).search(condition, pageable);
-    }
-
-    @Test
-    @DisplayName("조건 없는 목록 조회도 그대로 위임한다")
-    void findAll_without_condition_delegates() {
-        PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
-        PostSearchCondition condition = new PostSearchCondition(null, null, null, null);
-        Page<PostListResponse> empty = new PageImpl<>(List.of(), pageable, 0);
-
-        given(postRepository.search(condition, pageable)).willReturn(empty);
-
-        Page<PostListResponse> result = postService.findAll(condition, pageable);
-
-        assertThat(result.getContent()).isEmpty();
-        verify(postRepository).search(condition, pageable);
+        assertThat(result).isSameAs(repositoryResult);
     }
 
     @Test
