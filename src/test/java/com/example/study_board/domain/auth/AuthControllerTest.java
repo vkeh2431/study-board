@@ -88,7 +88,34 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.email").exists());
+    }
+
+    @Test
+    @DisplayName("회원가입 시 비밀번호가 8자 미만이면 400")
+    void signup_with_short_password_returns_400() throws Exception {
+        SignupRequest request = new SignupRequest("user@example.com", "유저", "short");
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.password").exists());
+    }
+
+    @Test
+    @DisplayName("회원가입 시 사용자명이 50자를 초과하면 400")
+    void signup_with_too_long_username_returns_400() throws Exception {
+        SignupRequest request = new SignupRequest("user@example.com", "a".repeat(51), "password123");
+
+        mockMvc.perform(post("/api/auth/signup")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.username").exists());
     }
 
     @Test

@@ -28,6 +28,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
+import java.util.Collections;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,7 +149,7 @@ class PostControllerTest {
     @DisplayName("게시글 생성")
     @WithMockCustomUser
     void create_post() throws Exception {
-        PostCreateRequest request = new PostCreateRequest("제목", "내용", null, null);
+        PostCreateRequest request = new PostCreateRequest("제목", "내용", 5L, List.of("Spring", "JPA"));
         PostResponse response = new PostResponse(1L, "제목", "내용", "작성자", null, List.of(), 0, 0L, false,
                 LocalDateTime.now(), LocalDateTime.now());
 
@@ -161,6 +162,15 @@ class PostControllerTest {
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.title").value("제목"))
                 .andExpect(jsonPath("$.authorName").value("작성자"));
+
+        // 요청 본문이 PostCreateRequest로 역직렬화되어 모든 필드가 서비스로 그대로 전달되어야 한다
+        ArgumentCaptor<PostCreateRequest> captor = ArgumentCaptor.forClass(PostCreateRequest.class);
+        verify(postService).create(eq(1L), captor.capture());
+        PostCreateRequest captured = captor.getValue();
+        assertThat(captured.title()).isEqualTo("제목");
+        assertThat(captured.content()).isEqualTo("내용");
+        assertThat(captured.categoryId()).isEqualTo(5L);
+        assertThat(captured.tagNames()).containsExactly("Spring", "JPA");
     }
 
     @Test
@@ -185,7 +195,36 @@ class PostControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.title").exists());
+    }
+
+    @Test
+    @DisplayName("게시글 생성 시 제목이 한계를 초과하면 400 에러")
+    @WithMockCustomUser
+    void create_post_with_too_long_title_returns_400() throws Exception {
+        PostCreateRequest request = new PostCreateRequest("a".repeat(201), "내용", null, null);
+
+        mockMvc.perform(post("/api/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.title").exists());
+    }
+
+    @Test
+    @DisplayName("게시글 생성 시 본문이 비어있으면 400 에러")
+    @WithMockCustomUser
+    void create_post_with_blank_content_returns_400() throws Exception {
+        PostCreateRequest request = new PostCreateRequest("제목", "", null, null);
+
+        mockMvc.perform(post("/api/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.content").exists());
     }
 
     @Test
@@ -193,6 +232,36 @@ class PostControllerTest {
     @WithMockCustomUser
     void create_post_with_too_long_content_returns_400() throws Exception {
         PostCreateRequest request = new PostCreateRequest("제목", "a".repeat(50001), null, null);
+
+        mockMvc.perform(post("/api/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.content").exists());
+    }
+
+    @Test
+    @DisplayName("게시글 생성 시 태그가 10개를 초과하면 400 에러")
+    @WithMockCustomUser
+    void create_post_with_too_many_tags_returns_400() throws Exception {
+        PostCreateRequest request = new PostCreateRequest("제목", "내용", null, Collections.nCopies(11, "tag"));
+
+        mockMvc.perform(post("/api/posts")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.tagNames").exists());
+    }
+
+    @Test
+    @DisplayName("게시글 생성 시 태그명이 한계를 초과하면 400 에러")
+    @WithMockCustomUser
+    void create_post_with_too_long_tag_name_returns_400() throws Exception {
+        // 원소 단위 제약(List<@Size(max=30) String>)이라 fieldErrors 키가 tagNames[0] 형태로 잡혀
+        // 특정 필드 키 대신 status·code만 고정한다
+        PostCreateRequest request = new PostCreateRequest("제목", "내용", null, List.of("a".repeat(31)));
 
         mockMvc.perform(post("/api/posts")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -246,7 +315,7 @@ class PostControllerTest {
     @DisplayName("게시글 수정")
     @WithMockCustomUser
     void update_post() throws Exception {
-        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용", null, null);
+        PostUpdateRequest request = new PostUpdateRequest("수정된 제목", "수정된 내용", 7L, List.of("Spring", "Test"));
         PostResponse response = new PostResponse(1L, "수정된 제목", "수정된 내용", "작성자", null, List.of(), 0, 0L, false,
                 LocalDateTime.now(), LocalDateTime.now());
 
@@ -258,6 +327,15 @@ class PostControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.title").value("수정된 제목"))
                 .andExpect(jsonPath("$.content").value("수정된 내용"));
+
+        // 요청 본문이 PostUpdateRequest로 역직렬화되어 모든 필드가 서비스로 그대로 전달되어야 한다
+        ArgumentCaptor<PostUpdateRequest> captor = ArgumentCaptor.forClass(PostUpdateRequest.class);
+        verify(postService).update(eq(1L), eq(1L), eq(Role.USER), captor.capture());
+        PostUpdateRequest captured = captor.getValue();
+        assertThat(captured.title()).isEqualTo("수정된 제목");
+        assertThat(captured.content()).isEqualTo("수정된 내용");
+        assertThat(captured.categoryId()).isEqualTo(7L);
+        assertThat(captured.tagNames()).containsExactly("Spring", "Test");
     }
 
     @Test
@@ -286,7 +364,8 @@ class PostControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.title").exists());
     }
 
     @Test

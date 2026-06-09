@@ -27,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
@@ -72,6 +73,13 @@ class CommentControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.content").value("댓글 내용"))
                 .andExpect(jsonPath("$.authorName").value("작성자"));
+
+        // 요청 본문이 CommentCreateRequest로 역직렬화되어 서비스로 그대로 전달되어야 한다
+        ArgumentCaptor<CommentCreateRequest> captor = ArgumentCaptor.forClass(CommentCreateRequest.class);
+        verify(commentService).create(eq(1L), eq(1L), captor.capture());
+        CommentCreateRequest captured = captor.getValue();
+        assertThat(captured.content()).isEqualTo("댓글 내용");
+        assertThat(captured.parentId()).isNull();
     }
 
     @Test
@@ -87,6 +95,22 @@ class CommentControllerTest {
     }
 
     @Test
+    @DisplayName("댓글 생성 시 게시글이 없으면 404")
+    @WithMockCustomUser
+    void create_comment_post_not_found() throws Exception {
+        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
+
+        given(commentService.create(eq(999L), eq(1L), any(CommentCreateRequest.class)))
+                .willThrow(new ResourceNotFoundException("Post", 999L));
+
+        mockMvc.perform(post("/api/posts/999/comments")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
+    }
+
+    @Test
     @DisplayName("댓글 생성 시 내용이 비어있으면 400 에러")
     @WithMockCustomUser
     void create_comment_validation_fail() throws Exception {
@@ -96,7 +120,8 @@ class CommentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.content").exists());
     }
 
     @Test
@@ -109,7 +134,8 @@ class CommentControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.content").exists());
     }
 
     @Test
@@ -155,6 +181,41 @@ class CommentControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content").value("수정된 내용"));
+
+        // 요청 본문이 CommentUpdateRequest로 역직렬화되어 서비스로 그대로 전달되어야 한다
+        ArgumentCaptor<CommentUpdateRequest> captor = ArgumentCaptor.forClass(CommentUpdateRequest.class);
+        verify(commentService).update(eq(1L), eq(1L), eq(Role.USER), captor.capture());
+        assertThat(captor.getValue().content()).isEqualTo("수정된 내용");
+    }
+
+    @Test
+    @DisplayName("댓글 수정 시 댓글이 없으면 404")
+    @WithMockCustomUser
+    void update_comment_not_found() throws Exception {
+        CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
+
+        given(commentService.update(eq(999L), eq(1L), eq(Role.USER), any(CommentUpdateRequest.class)))
+                .willThrow(new ResourceNotFoundException("Comment", 999L));
+
+        mockMvc.perform(put("/api/comments/999")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
+    }
+
+    @Test
+    @DisplayName("댓글 수정 시 내용이 비어있으면 400 에러")
+    @WithMockCustomUser
+    void update_comment_validation_fail() throws Exception {
+        CommentUpdateRequest request = new CommentUpdateRequest("");
+
+        mockMvc.perform(put("/api/comments/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()))
+                .andExpect(jsonPath("$.fieldErrors.content").exists());
     }
 
     @Test
@@ -195,51 +256,6 @@ class CommentControllerTest {
                 .andExpect(jsonPath("$.code").value(ErrorCode.FORBIDDEN.getCode()));
     }
 
-    @Test
-    @DisplayName("댓글 생성 시 게시글이 없으면 404")
-    @WithMockCustomUser
-    void create_comment_post_not_found() throws Exception {
-        CommentCreateRequest request = new CommentCreateRequest("댓글 내용");
-
-        given(commentService.create(eq(999L), eq(1L), any(CommentCreateRequest.class)))
-                .willThrow(new ResourceNotFoundException("Post", 999L));
-
-        mockMvc.perform(post("/api/posts/999/comments")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
-    }
-
-    @Test
-    @DisplayName("댓글 수정 시 댓글이 없으면 404")
-    @WithMockCustomUser
-    void update_comment_not_found() throws Exception {
-        CommentUpdateRequest request = new CommentUpdateRequest("수정된 내용");
-
-        given(commentService.update(eq(999L), eq(1L), eq(Role.USER), any(CommentUpdateRequest.class)))
-                .willThrow(new ResourceNotFoundException("Comment", 999L));
-
-        mockMvc.perform(put("/api/comments/999")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.code").value(ErrorCode.RESOURCE_NOT_FOUND.getCode()));
-    }
-
-    @Test
-    @DisplayName("댓글 수정 시 내용이 비어있으면 400 에러")
-    @WithMockCustomUser
-    void update_comment_validation_fail() throws Exception {
-        CommentUpdateRequest request = new CommentUpdateRequest("");
-
-        mockMvc.perform(put("/api/comments/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(request)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.code").value(ErrorCode.VALIDATION_ERROR.getCode()));
-    }
-
     // === Phase 17: 대댓글 ===
 
     @Test
@@ -260,7 +276,7 @@ class CommentControllerTest {
 
         ArgumentCaptor<CommentCreateRequest> captor = ArgumentCaptor.forClass(CommentCreateRequest.class);
         verify(commentService).create(eq(1L), eq(1L), captor.capture());
-        org.assertj.core.api.Assertions.assertThat(captor.getValue().parentId()).isEqualTo(10L);
+        assertThat(captor.getValue().parentId()).isEqualTo(10L);
     }
 
     @Test
