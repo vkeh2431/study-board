@@ -333,15 +333,20 @@ class PostRepositoryTest {
     }
 
     @Test
-    @DisplayName("여러 태그를 가진 글도 태그 검색 시 한 건으로 집계된다 (distinct)")
+    @DisplayName("여러 태그를 가진 글은 태그 검색 시 1건으로만 집계되고, 그 태그가 없는 글은 제외된다 (EXISTS 상관 서브쿼리)")
     void search_by_tag_no_duplicate() {
-        savePostWith("멀티태그 글", null, "java", "spring", "jpa");
+        savePostWith("멀티태그 글", null, "java", "spring", "jpa"); // 검색 태그 java 보유
+        savePostWith("무관한 글", null, "python");                  // java 미보유 → 제외돼야 함
 
         PageRequest pageable = PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt"));
         Page<PostListResponse> result =
                 postRepository.search(new PostSearchCondition(null, null, null, "java"), pageable);
 
-        assertThat(result.getContent()).hasSize(1);
+        // 한 글이 태그 3개를 가져도 결과는 1건(중복 없음). 상관 조건(postTag.post == post)을 빠뜨리면
+        // '무관한 글'까지 EXISTS를 통과해 2건이 되어 깨진다 → 서브쿼리 상관성에 teeth.
+        assertThat(result.getContent())
+                .extracting(PostListResponse::title)
+                .containsExactly("멀티태그 글");
         assertThat(result.getTotalElements()).isEqualTo(1);
     }
 

@@ -49,10 +49,6 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
         QPostLike postLike = QPostLike.postLike;
         QMember member = QMember.member;
         QCategory category = QCategory.category;
-        QPostTag postTag = QPostTag.postTag;
-        QTag tag = QTag.tag;
-
-        boolean filterByTag = condition.tag() != null && !condition.tag().isBlank();
 
         JPAQuery<PostListResponse> contentQuery = queryFactory
                 .select(Projections.constructor(PostListResponse.class,
@@ -72,22 +68,13 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
                 .join(post.member, member)
                 .leftJoin(post.category, category); // nullable → LEFT (무카테고리 글 누락 방지)
 
-        JPAQuery<Long> countQuery = filterByTag
-                ? queryFactory.select(post.countDistinct()).from(post)
-                : queryFactory.select(post.count()).from(post);
-
-        if (filterByTag) {
-            // 태그 조건이 있을 때만 join (항상 join하면 태그 없는 글이 누락). 한 글이 여러 태그를 가질 수 있어 distinct.
-            contentQuery.join(post.postTags, postTag).join(postTag.tag, tag)
-                    .where(tag.name.eq(condition.tag())).distinct();
-            countQuery.join(post.postTags, postTag).join(postTag.tag, tag)
-                    .where(tag.name.eq(condition.tag()));
-        }
+        JPAQuery<Long> countQuery = queryFactory.select(post.count()).from(post);
 
         BooleanExpression[] predicates = {
                 keywordContains(condition.keyword()),
                 authorContains(condition.author()),
-                categoryIdEq(condition.categoryId())
+                categoryIdEq(condition.categoryId()),
+                hasTagNamed(condition.tag())
         };
 
         List<PostListResponse> content = contentQuery
@@ -150,6 +137,25 @@ public class PostRepositoryImpl implements PostRepositoryCustom {
 
     private BooleanExpression categoryIdEq(Long categoryId) {
         return (categoryId == null) ? null : QPost.post.category.id.eq(categoryId);
+    }
+
+    /**
+     * "이름이 {@code tagName}인 태그를 가진 게시글" 조건을 EXISTS 상관 서브쿼리로 만든다.
+     * collection join + distinct 대신 EXISTS를 쓰면 post가 조인으로 곱해지지 않으므로
+     * 중복 제거(distinct)·countDistinct가 원천적으로 불필요하고, count() 경로와 그대로 호환된다.
+     * 또 다른 술어들과 동일하게 null이면 where에서 무시되어 태그 없는 글도 누락되지 않는다.
+     */
+    private BooleanExpression hasTagNamed(String tagName) {
+        if (tagName == null || tagName.isBlank()) {
+            return null;
+        }
+        QPostTag postTag = QPostTag.postTag;
+        QTag tag = QTag.tag;
+        return JPAExpressions.selectOne()
+                .from(postTag)
+                .join(postTag.tag, tag)
+                .where(postTag.post.eq(QPost.post), tag.name.eq(tagName))
+                .exists();
     }
 
     /**
