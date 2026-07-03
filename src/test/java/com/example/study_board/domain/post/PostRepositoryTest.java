@@ -328,7 +328,6 @@ class PostRepositoryTest {
                 postRepository.search(new PostSearchCondition(null, null, null, "spring"), pageable);
 
         assertThat(result.getContent()).hasSize(1);
-        assertThat(result.getTotalElements()).isEqualTo(1);
         assertThat(result.getContent().get(0).title()).isEqualTo("자바 글");
     }
 

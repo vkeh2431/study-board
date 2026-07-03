@@ -44,7 +44,7 @@ public class Comment extends BaseTimeEntity {
     private Comment parent;
 
     /**
-     * 자기참조 양방향의 역방향(학습용). <b>조회 경로에서 절대 navigate 하지 않는다</b> —
+     * 자기참조 양방향의 역방향(학습용). 조회 경로에서 절대 navigate 하지 않는다 —
      * 계층 조회는 한 게시글의 평면 리스트를 1쿼리로 가져와 메모리에서 트리로 조립한다(N+1 회피, Phase 8 연계).
      */
     @OneToMany(mappedBy = "parent")
@@ -52,8 +52,8 @@ public class Comment extends BaseTimeEntity {
 
     /**
      * tombstone 플래그(Phase 17). 자식이 있는 댓글을 삭제하면 트리 유지를 위해 행은 보이게 둔 채
-     * 본문만 "삭제된 댓글입니다"로 가린다. <b>{@code deletedAt}(@SQLRestriction이 조회에서 숨기는
-     * 하드 soft delete)과 구분</b>되는 별개의 축이다: tombstone은 {@code deleted_at=NULL}이라 조회에 계속 노출된다.
+     * 본문만 "삭제된 댓글입니다"로 가린다. {@code deletedAt}(@SQLRestriction이 조회에서 숨기는
+     * 하드 soft delete)과 구분되는 별개의 축이다: tombstone은 {@code deleted_at=NULL}이라 조회에 계속 노출된다.
      */
     @Column(nullable = false)
     private boolean deleted;
